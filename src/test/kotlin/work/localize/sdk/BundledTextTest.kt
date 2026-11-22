@@ -71,6 +71,22 @@ class BundledTextTest {
         assertEquals("Ann and Bob", BundledText.format("%1\$s and %2\$s", linkedMapOf("a" to "Ann", "b" to "Bob"), 2))
     }
 
+    /**
+     * A form that shows neither the count nor every other argument does not
+     * say which position is the count's. An entry called "count" in the map
+     * names it, and the count of the lookup is the number shown there.
+     */
+    @Test
+    fun anEntryCalledCountNamesTheCountsPosition() {
+        val values = linkedMapOf<String, Any?>("count" to 1, "first" to "Alice", "second" to "Bob")
+        assertEquals("One for Alice", BundledText.format("One for %2\$s", values, 1))
+        assertEquals("1 for Alice and Bob", BundledText.format("%1\$d for %2\$s and %3\$s", values, 1))
+        assertEquals(
+            "Alice has 5 items",
+            BundledText.format("%1\$s has %2\$d items", linkedMapOf("name" to "Alice", "count" to 99), 5),
+        )
+    }
+
     @Test
     fun unnumberedConversionsAreTakenInTurn() {
         assertEquals("Ann and Bob", BundledText.format("%s and %s", linkedMapOf("a" to "Ann", "b" to "Bob"), null))

@@ -396,4 +396,21 @@ class CacheTest {
         assertEquals("", client.text("a.b"))
         assertEquals("deep", client.text("a.c.d"))
     }
+
+    /** A file nested as deeply as the parser takes from the CDN is still there after a restart. */
+    @Test
+    fun aFileAtTheNestingLimitIsReadBackFromTheDevice() {
+        val h = Harness(folder.root)
+        val levels = Json.MAX_DEPTH
+        val key = List(levels) { "a" }.joinToString(".")
+        val json = "{ \"a\": ".repeat(levels) + "\"deep\"" + " }".repeat(levels)
+        h.launchWith("en" to json)
+        assertEquals("deep", h.launch().text(key))
+        offline(h)
+
+        val nextLaunch = h.launch()
+
+        assertEquals("v1", nextLaunch.version)
+        assertEquals("deep", nextLaunch.text(key))
+    }
 }

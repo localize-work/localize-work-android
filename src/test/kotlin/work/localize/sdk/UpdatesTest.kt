@@ -216,6 +216,32 @@ class UpdatesTest {
         assertEquals("Tere v2", next.text("title"))
     }
 
+    /**
+     * A regional locale without overrides of its own has no file in a
+     * release. The release in use, which holds its base language, is whole
+     * for it all the same.
+     */
+    @Test
+    fun inNextLaunchModeARegionalLocaleWithoutOverridesReadsTheReleaseInUse() {
+        val h = Harness(folder.root)
+        h.launchWith("en" to """{ "title": "Hello v1" }""")
+        val nextLaunch: LocalizeConfig.Builder.() -> Unit = { updatePolicy(UpdatePolicy.NEXT_LAUNCH) }
+        val client = h.listeningClient(configure = nextLaunch)
+        h.transport.pointer("v2")
+        h.transport.file("v2", "en", """{ "title": "Hello v2" }""")
+        assertEquals(Status.DOWNLOADED, client.refreshNow().status)
+        h.transport.requests.clear()
+
+        client.setLocale("en-FI", null)
+
+        assertEquals(listOf(POINTER_URL, fileUrl("v2", "en-FI"), fileUrl("v1", "en-FI")), h.transport.requests)
+        assertEquals("v1", client.version)
+        assertEquals("Hello v1", client.text("title"))
+        // The next launch reads v2, offline.
+        h.transport.unreachable(POINTER_URL)
+        assertEquals("Hello v2", h.listeningClient(deviceLocale = "en-FI", configure = nextLaunch).text("title"))
+    }
+
     @Test
     fun inNextLaunchModeAReleaseGoneFromTheCdnIsNotCompletedWithEmptyFiles() {
         val h = Harness(folder.root)

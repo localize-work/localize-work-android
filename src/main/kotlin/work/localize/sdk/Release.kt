@@ -35,10 +35,17 @@ internal class Release(
     companion object {
         const val FORMAT: Long = 1
 
+        /**
+         * The objects [toJson] wraps a namespace file in: the document, its
+         * `files`, and a locale. A file as deep as the parser takes from the
+         * CDN must still be readable once it is stored inside them.
+         */
+        private const val ENVELOPE_DEPTH = 3
+
         /** Reads what [toJson] wrote; `null` for anything else. */
         fun fromJson(text: String, expectedVersion: String): Release? {
             val root = try {
-                Json.parse(text) as? Map<*, *> ?: return null
+                Json.parse(text, Json.MAX_DEPTH + ENVELOPE_DEPTH) as? Map<*, *> ?: return null
             } catch (invalid: JsonException) {
                 return null
             }

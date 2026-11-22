@@ -15,9 +15,10 @@ internal object Json {
     /** Deeper nesting than this is refused instead of risking a stack overflow. */
     const val MAX_DEPTH: Int = 200
 
+    /** @param maxDepth how deeply objects and arrays may nest */
     @Throws(JsonException::class)
-    fun parse(text: String): Any? {
-        val parser = Parser(text)
+    fun parse(text: String, maxDepth: Int = MAX_DEPTH): Any? {
+        val parser = Parser(text, maxDepth)
         return parser.parseDocument()
     }
 
@@ -82,7 +83,7 @@ internal object Json {
         out.append('"')
     }
 
-    private class Parser(private val text: String) {
+    private class Parser(private val text: String, private val maxDepth: Int) {
         private var position = 0
 
         fun parseDocument(): Any? {
@@ -96,7 +97,7 @@ internal object Json {
         }
 
         private fun parseValue(depth: Int): Any? {
-            if (depth > MAX_DEPTH) throw error("nested too deeply")
+            if (depth > maxDepth) throw error("nested too deeply")
             if (position >= text.length) throw error("unexpected end of text")
             return when (val char = text[position]) {
                 '{' -> parseObject(depth)

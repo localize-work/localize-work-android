@@ -43,7 +43,11 @@ internal object ResourceNames {
  * position: the first entry of the argument map is argument 1, and so on. The
  * count of a plural lookup, when it is not in the map itself, takes the
  * position of the text's `%N$d` conversion, or in a form that does not show
- * the count the position the text leaves unused.
+ * the count the position the text leaves unused. A form that shows neither
+ * the count nor every other argument does not say where the count belongs;
+ * an app with such texts names the count's place by putting an entry called
+ * `count` into the map where the source text has it. The number shown there
+ * is the count of the lookup.
  */
 internal object BundledText {
     private class Conversion(val start: Int, val end: Int, val position: Int, val type: Char)
@@ -103,7 +107,9 @@ internal object BundledText {
             return Interpolator.interpolate(raw, args, count)
         }
 
-        val values = args.values.toList()
+        // An entry called "count" marks the count's place; the count that
+        // chose the plural form is the number shown.
+        val values = args.entries.map { (name, value) -> if (name == "count" && count != null) count else value }
         val countPosition = if (count != null && !args.containsKey("count")) {
             conversions.firstOrNull { it.type == 'd' }?.position ?: unusedPosition(conversions, values.size)
         } else {

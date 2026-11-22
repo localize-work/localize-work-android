@@ -27,7 +27,10 @@ class InterpolatorTest {
     fun countComesFromThePluralCount() {
         assertEquals("3 items", fill("{{count}} items", count = 3))
         assertEquals("-2 items", fill("{{ count }} items", count = -2))
-        assertEquals("about 3", fill("{{count}}", mapOf("count" to "about 3"), count = 3))
+        // The number that chose the plural form is the number shown, as on iOS.
+        assertEquals("3 items", fill("{{count}} items", mapOf("count" to 1), count = 3))
+        // Without a count, a value named "count" is a value like any other.
+        assertEquals("about 3", fill("{{count}}", mapOf("count" to "about 3")))
         assertEquals("{{count}} items", fill("{{count}} items"))
     }
 

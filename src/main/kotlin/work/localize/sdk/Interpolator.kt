@@ -4,8 +4,9 @@ package work.localize.sdk
  * Fills `{{name}}` placeholders the way i18next writes them.
  *
  * - `{{name}}` and `{{ name }}` take the value given under `name`.
- * - `{{count}}` is the count of a plural lookup, unless a value named `count`
- *   was given.
+ * - `{{count}}` is the count of a plural lookup: the number that chose the
+ *   plural form is the number shown. Without a count, a value named `count`
+ *   is used like any other.
  * - `{{value, format}}` takes `value`; the format name is ignored.
  * - `{{- name}}`, i18next's "do not escape" form, is read as `{{name}}`.
  * - A placeholder without a value is left exactly as written.
@@ -34,8 +35,8 @@ internal object Interpolator {
             val name = nameOf(inner)
             val replacement = when {
                 name.isEmpty() -> null
-                args.containsKey(name) -> args[name]?.toString() ?: ""
                 name == "count" && count != null -> count.toString()
+                args.containsKey(name) -> args[name]?.toString() ?: ""
                 else -> null
             }
             if (replacement != null) {

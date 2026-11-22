@@ -176,8 +176,10 @@ as an empty slug or a version that is not `v` followed by a number.
 
 ### Choosing the locale
 
-Without a `locale`, the SDK uses the device's first preferred locale as it is
-when `init` runs. If your app has its own language picker, pass the choice as
+Without a `locale`, the SDK uses the first language the user chose for the
+device (or for your app, where Android offers per-app languages), as it is when
+`init` runs. That holds even when your app bundles no strings in that language:
+a language can be published without being bundled. If your app has its own language picker, pass the choice as
 `locale` at start, and call `Localize.setLocale("et")` when the user changes it.
 A change of the system language while the app is running is not picked up by
 itself; call `setLocale` for it too.
@@ -272,7 +274,7 @@ with, because a project's files hold the forms that release names.
 | In the text | Result |
 |---|---|
 | `{{name}}`, `{{ name }}` | The value passed under `name`. |
-| `{{count}}` | The count of a plural lookup. |
+| `{{count}}` | The count of a plural lookup: the number that chose the form is the number shown. |
 | `{{price, currency}}` | The value of `price`. The format name is ignored; format the value in your code. |
 | `{{- name}}` | The same as `{{name}}`. |
 | `{{unknown}}` | Left exactly as written. |
@@ -309,6 +311,12 @@ by position: the first entry of the map you pass is argument 1, the second is
 argument 2. `mapOf` and `LinkedHashMap` keep the order you write. The count of a
 plural takes the position of the text's `%1$d`; in a plural form that does not
 show the count, it takes the position that form leaves unused.
+
+One case needs your help. A plural form that shows neither the count nor every
+other argument (`One for %2$s`, from a source text with a count and two names)
+does not say which position is the count's. For a key like that, put the count
+into the map yourself, where the source text has it:
+`mapOf("count" to n, "first" to a, "second" to b)` together with `count = n`.
 
 Bundled strings come in the language Android picks for your app. If you set
 `locale` yourself, or call `Localize.setLocale`, on a system where that does
@@ -348,6 +356,12 @@ release is used as soon as it is complete, and listeners are told. With
 `UpdatePolicy.NEXT_LAUNCH` it is stored and used from the next start, so no text
 changes while the user is looking at it. On the very first launch that means
 the app shows its bundled strings until it is started again.
+
+`setLocale` does not end the run. With `NEXT_LAUNCH` the app keeps the release
+it started with, and files that release lacks for the new locale are fetched
+from that same release. When it has none for the new locale, the app shows its
+bundled strings until the next start. A regional locale such as `en-FI` needs
+no file of its own for this: the release's `en` texts are enough.
 
 **Failures.** A request that gets no answer, or a server error (5xx), is tried
 up to three times. Anything else is final for that refresh:

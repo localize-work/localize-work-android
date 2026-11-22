@@ -3,6 +3,7 @@ package work.localize.sdk
 import android.content.Context
 import android.os.Build
 import android.os.Handler
+import android.os.LocaleList
 import android.os.Looper
 import android.util.Log
 import java.io.File
@@ -197,13 +198,18 @@ public object Localize {
         Handler(Looper.getMainLooper()).post { callback.onResult(result) }
     }
 
+    /**
+     * The first language the user asked for. Not the first locale of the
+     * app's resource configuration: Android moves the best match among the
+     * languages the app bundles to the front of that list, and a language
+     * that is only published, not bundled, would then never be asked for.
+     */
     private fun deviceLocale(context: Context): String {
-        val configuration = context.resources.configuration
         val locale: Locale? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            configuration.locales.get(0)
+            LocaleList.getDefault().get(0)
         } else {
             @Suppress("DEPRECATION")
-            configuration.locale
+            context.resources.configuration.locale
         }
         return (locale ?: Locale.getDefault()).toLanguageTag()
     }

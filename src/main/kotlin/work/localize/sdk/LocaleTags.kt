@@ -60,6 +60,13 @@ internal object LocaleTags {
         return chain.toList()
     }
 
+    /** The shorter forms of [tag], longest first: `zh-Hant-TW` gives `zh-Hant`, `zh`. */
+    fun parents(tag: String): List<String> {
+        val all = LinkedHashSet<String>()
+        addWithParents(tag, all)
+        return all.drop(1)
+    }
+
     private fun addWithParents(tag: String, into: MutableSet<String>) {
         var current = tag
         while (current.isNotEmpty()) {

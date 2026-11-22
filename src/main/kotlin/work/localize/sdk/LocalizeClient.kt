@@ -241,6 +241,13 @@ internal class LocalizeClient(
      * locale was switched to one it has no files for, they are fetched from
      * that same release: adding files of the version already shown changes no
      * text on screen and mixes nothing.
+     *
+     * When none of the missing files exists, the old release may be gone from
+     * the CDN, and reading it with empty files would show its fallback
+     * language in place of the app's bundled strings. It is completed all the
+     * same when every locale that lacks files is a regional form of a
+     * language the release has texts for: a regional locale without
+     * overrides of its own has no file, and that is normal.
      */
     private fun completeReleaseInUse(chain: List<String>, currentVersion: String) {
         val active = snapshot.release ?: return
@@ -252,8 +259,8 @@ internal class LocalizeClient(
         } catch (failure: RuntimeException) {
             return
         }
-        // Nothing at all: the old release has probably been removed from the CDN.
-        if (more.foundNothing || closed) return
+        if (closed) return
+        if (more.foundNothing && !more.files.keys.all { isRegionalFormOfHeldLanguage(active, it) }) return
         synchronized(stateLock) {
             val current = snapshot
             val extended = active.plus(more.files)
@@ -262,6 +269,11 @@ internal class LocalizeClient(
         }
         notifyListeners(active.version)
     }
+
+    private fun isRegionalFormOfHeldLanguage(release: Release, locale: String): Boolean =
+        LocaleTags.parents(locale).any { parent ->
+            config.namespaces.any { namespace -> release.tree(parent, namespace)?.isNotEmpty() == true }
+        }
 
     /**
      * Puts [version] with the [fetched] files in use, or stores it for the
