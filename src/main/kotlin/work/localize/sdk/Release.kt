@@ -18,9 +18,12 @@ internal class Release(
     fun hasAll(locales: List<String>, namespaces: List<String>): Boolean =
         locales.all { locale -> namespaces.all { namespace -> has(locale, namespace) } }
 
-    /** This release with more files of the same version added. */
+    /**
+     * This release with more files of the same version added; this very
+     * release when it has all of them already.
+     */
     fun plus(more: Map<String, Map<String, NamespaceTree>>): Release {
-        if (more.isEmpty()) return this
+        if (more.all { (locale, namespaces) -> namespaces.keys.all { has(locale, it) } }) return this
         val merged = LinkedHashMap<String, Map<String, NamespaceTree>>(files)
         for ((locale, namespaces) in more) {
             merged[locale] = LinkedHashMap(merged[locale] ?: emptyMap()).apply { putAll(namespaces) }

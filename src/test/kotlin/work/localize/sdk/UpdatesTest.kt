@@ -532,6 +532,137 @@ class UpdatesTest {
     }
 
     /**
+     * The release has texts of the regional locale and none of its base
+     * language. A namespace added by an app update has no file in either:
+     * the release is still read, since it has the language.
+     */
+    @Test
+    fun aReleaseWithTextsOfARegionalLocaleOnlyIsCompletedForANamespaceItLacks() {
+        val h = Harness(folder.root)
+        h.launchWith("fr-CA" to """{ "title": "Allô" }""")
+        h.transport.status(POINTER_URL, 503)
+
+        val client = h.launch(deviceLocale = "fr-CA") { namespaces("translation", "extra") }
+
+        assertNull(client.version)
+        assertEquals(Status.FAILED, client.refreshNow().status)
+        assertEquals("v1", client.version)
+        assertEquals("Allô", client.text("title", fallback = "Bonjour (bundled)"))
+    }
+
+    /**
+     * Texts of the language in a namespace the app no longer asks for say
+     * little about the namespaces it does ask for: they do not make a release
+     * nothing has named readable in the fallback locale.
+     */
+    @Test
+    fun textsInANamespaceThatIsNotConfiguredDoNotVouchForARelease() {
+        val h = Harness(folder.root)
+        h.transport.pointer("v1")
+        h.transport.file("v1", "fr", """{ "title": "Bienvenue" }""", namespace = "onboarding")
+        h.transport.file("v1", "en", """{ "title": "Welcome" }""", namespace = "onboarding")
+        h.transport.file("v1", "en", """{ "title": "Hello" }""")
+        val earlier = h.launch(deviceLocale = "fr") {
+            fallbackLocale("en")
+            namespaces("onboarding")
+        }
+        assertEquals(Status.APPLIED, earlier.refreshNow().status)
+        h.transport.status(POINTER_URL, 503)
+
+        val client = h.launch(deviceLocale = "fr") { fallbackLocale("en") }
+
+        assertEquals(Status.FAILED, client.refreshNow().status)
+        assertNull(client.version)
+        assertEquals("Bonjour (bundled)", client.text("title", fallback = "Bonjour (bundled)"))
+    }
+
+    /**
+     * The locale is switched while the files of the earlier one are on their
+     * way. A file of the earlier locale shows that the release has that
+     * locale, not the one the app is in now: the release is not read in the
+     * fallback locale for it, and the refresh the switch asked for agrees.
+     */
+    @Test
+    fun aFileOfTheEarlierLocaleDoesNotVouchForTheLocaleSwitchedTo() {
+        val h = Harness(folder.root)
+        h.transport.file("v1", "fr", """{ "title": "Bonjour" }""")
+        h.transport.file("v1", "en-GB", """{ "title": "Hello (en-GB)" }""")
+        h.launchWith("de" to """{ "title": "Hallo" }""")
+        h.transport.status(POINTER_URL, 503)
+        val queued = ArrayList<Runnable>()
+        val client = LocalizeClient(
+            config = LocalizeConfig(SLUG) {
+                cdnBaseUrl(CDN)
+                fallbackLocale("en-GB")
+            },
+            cacheRoot = folder.root,
+            deviceLocale = "fr",
+            transport = h.transport,
+            bundled = { _, _ -> null },
+            worker = { queued.add(it) },
+            callbacks = { it.run() },
+            sleeper = { },
+        )
+        h.transport.onRequest = { url ->
+            if (url == fileUrl("v1", "fr")) {
+                h.transport.onRequest = {}
+                client.setLocale("en", null)
+            }
+        }
+
+        val result = client.refreshNow()
+
+        assertEquals(Status.FAILED, result.status)
+        assertNull(client.version)
+        assertEquals("Hello (bundled)", client.text("title", fallback = "Hello (bundled)"))
+        queued.single().run()
+        assertNull(client.version)
+        assertEquals("Hello (bundled)", client.text("title", fallback = "Hello (bundled)"))
+        // French is what the release does have, and switching back reads it.
+        client.setLocale("fr", null)
+        queued.last().run()
+        assertEquals("Bonjour", client.text("title"))
+    }
+
+    /**
+     * A pinned release, nothing on the device yet, and the locale switched
+     * while the first file is on its way. The release has no file of the
+     * earlier locale and one of the new: it is published, and the refresh
+     * goes on to the locale the app is in.
+     */
+    @Test
+    fun aPinnedReleaseIsNotTakenForUnpublishedOverTheLocaleTheAppHasLeft() {
+        val h = Harness(folder.root)
+        h.transport.file("v1", "fr", """{ "title": "Bonjour" }""")
+        val queued = ArrayList<Runnable>()
+        val client = LocalizeClient(
+            config = LocalizeConfig(SLUG) {
+                cdnBaseUrl(CDN)
+                version("v1")
+            },
+            cacheRoot = folder.root,
+            deviceLocale = "en",
+            transport = h.transport,
+            bundled = { _, _ -> null },
+            worker = { queued.add(it) },
+            callbacks = { it.run() },
+            sleeper = { },
+        )
+        h.transport.onRequest = { url ->
+            if (url == fileUrl("v1", "en")) {
+                h.transport.onRequest = {}
+                client.setLocale("fr", null)
+            }
+        }
+
+        val result = client.refreshNow()
+
+        assertEquals(Status.APPLIED, result.status)
+        assertEquals("Bonjour", client.text("title"))
+        assertEquals(listOf(fileUrl("v1", "en"), fileUrl("v1", "fr")), h.transport.requests.toList())
+    }
+
+    /**
      * A pinned version is named by the configuration, as `latest.json` names
      * the latest one: a locale it has no file for reads the fallback locale,
      * without the pointer.
@@ -756,6 +887,48 @@ class UpdatesTest {
         assertEquals(LocalizeException.Reason.NOT_INITIALIZED, result.error?.reason)
         assertNull(old.version)
         assertTrue(heard.isEmpty())
+    }
+
+    /**
+     * Replaced late in a refresh: the pointer has failed already, the locale
+     * was switched meanwhile, and the client is fetching the new locale's
+     * files of the release it holds. Its caller still hears "replaced", not
+     * the pointer's error.
+     */
+    @Test
+    fun aClientReplacedAfterThePointerFailedReportsThatItWasReplaced() {
+        val h = Harness(folder.root)
+        h.transport.file("v1", "fr", """{ "title": "Bonjour" }""")
+        h.launchWith("en" to """{ "title": "Hello" }""")
+        h.transport.status(POINTER_URL, 503)
+        val queued = ArrayList<Runnable>()
+        val client = LocalizeClient(
+            config = LocalizeConfig(SLUG) {
+                cdnBaseUrl(CDN)
+                fallbackLocale("en")
+            },
+            cacheRoot = folder.root,
+            deviceLocale = "en",
+            transport = h.transport,
+            bundled = { _, _ -> null },
+            worker = { queued.add(it) },
+            callbacks = { it.run() },
+            sleeper = { },
+        )
+        var switched = false
+        h.transport.onRequest = { url ->
+            if (url == POINTER_URL && !switched) {
+                switched = true
+                client.setLocale("fr", null)
+            }
+            if (url == fileUrl("v1", "fr")) client.close()
+        }
+
+        val result = client.refreshNow()
+
+        assertEquals(Status.FAILED, result.status)
+        assertEquals(LocalizeException.Reason.NOT_INITIALIZED, result.error?.reason)
+        assertNull(client.version)
     }
 
     @Test

@@ -395,13 +395,22 @@ depends on whether the release is known to be the published one:
   strings are in the user's language. A file of the fallback locale does not
   count as an answer here: it says nothing about the new language.
 
-A regional locale such as `en-FI` needs no file of its own for any of this:
-the release's `en` texts are enough. The same goes for a namespace the release
-has no file for in a language it otherwise has texts in.
+In that second case one thing decides whether the release has the language: a
+file of the locale, or of a shorter form of it, was found, or the release
+already has texts in one of them, in one of the configured `namespaces`. So a
+regional locale such as `en-FI` needs no file of its own: the release's `en`
+texts are enough. Nor does a namespace need a file in a language the release
+has texts in elsewhere. Texts in a namespace the app no longer lists do not
+count.
+
+The locale can be switched while a refresh is running. The refresh then starts
+over for the locale the app is in now, with what it has already fetched: what
+it found out for the earlier locale, such as that the release has that
+language, is not carried over to the new one.
 
 Calling `Localize.init` again replaces the configuration. The earlier one
-stops: a download it still has under way stores nothing, so it cannot write
-over what the new one stores. The new one goes on from the release the earlier
+stops: a refresh it still has under way stores nothing, so it cannot write
+over what the new one stores, and reports only that it was replaced. The new one goes on from the release the earlier
 one held, also when that release could not be stored.
 
 **Failures.** A request that gets no answer, or a server error (5xx), is tried
