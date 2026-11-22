@@ -52,13 +52,17 @@ public class RefreshResult internal constructor(
     public val error: LocalizeException?,
 ) {
     public enum class Status {
-        /** New texts are in use now. */
+        /**
+         * Lookups read other texts now. A new release is in use; or the one
+         * this run started with is, which lacked files for the locale or
+         * could not be read from the device until now.
+         */
         APPLIED,
 
         /** A new release is stored and takes effect the next time the app starts ([UpdatePolicy.NEXT_LAUNCH]). */
         DOWNLOADED,
 
-        /** The release already in use is the current one; nothing changed. */
+        /** The release already in use is the current one, and lookups read what they read before. */
         UP_TO_DATE,
 
         /**

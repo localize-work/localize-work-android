@@ -17,7 +17,8 @@ import java.io.IOException
  * `state.json` is written after it, so a crash or a full disk leaves either
  * the old state or the new one. Anything that is not a release of this project
  * is thrown away; the cache is only ever a copy of what the CDN serves. Files
- * that cannot be read at all are left alone: they may be fine.
+ * that cannot be looked at, locked or in a folder that cannot be entered, are
+ * left alone: they may be fine.
  *
  * Reads and writes of every store exclude each other, so a client that is
  * being replaced and its replacement never work on the folder at once, and a
@@ -26,6 +27,19 @@ import java.io.IOException
 internal class ReleaseStore(root: File, projectSlug: String, private val cdnBaseUrl: String) {
     /** The folder of this project. */
     val directory = File(root, directoryName(projectSlug))
+
+    /**
+     * One name for [directory], however the configuration wrote its path:
+     * with `/.` in it, or through a symbolic link. Two configurations with
+     * the same one share the stored files.
+     */
+    val folderIdentity: File = try {
+        directory.canonicalFile
+    } catch (failure: IOException) {
+        directory.absoluteFile.normalize()
+    } catch (failure: SecurityException) {
+        directory.absoluteFile.normalize()
+    }
 
     /** Guarded by [DISK_LOCK]. */
     private var closed = false
@@ -83,6 +97,10 @@ internal class ReleaseStore(root: File, projectSlug: String, private val cdnBase
                 directory.delete()
                 return NOTHING
             }
+            // A folder that cannot be entered hides its files: they look
+            // missing, and are not. (A file in the folder's place is another
+            // matter; it holds nothing and goes the way of a damaged cache.)
+            if (directory.isDirectory && !directory.canExecute()) return UNREADABLE
             val state = readState()
             if (state == null) {
                 // No state, or one written for another CDN or by another format.

@@ -18,9 +18,11 @@ internal class AppRun {
 
     /**
      * What identifies the releases a client reads from the device: where they
-     * are kept, the CDN they came from, and the version it is pinned to.
+     * are kept ([ReleaseStore.folderIdentity], so that another spelling of
+     * the same folder is the same project), the CDN they came from, and the
+     * version it is pinned to.
      */
-    data class Key(val directory: File, val cdnBaseUrl: String, val pinnedVersion: String?)
+    data class Key(val folder: File, val cdnBaseUrl: String, val pinnedVersion: String?)
 
     /**
      * What the run holds of one project. It is also the lock for it: a client
@@ -50,7 +52,9 @@ internal class AppRun {
          * the project, as while its storage is locked. That is not a run
          * that started with nothing: it could not look. The device is read
          * again when the SDK is set up again and at the next refresh, and
-         * what is found then is the release the run starts with.
+         * what is found then is the release the run starts with. Once the
+         * run has written to the device there is nothing left to look for,
+         * and what it wrote waits for the next launch as any download does.
          */
         var unread = false
     }

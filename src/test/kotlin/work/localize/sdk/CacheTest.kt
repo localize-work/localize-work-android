@@ -529,8 +529,150 @@ class CacheTest {
 
         assertNull(client.version)
         assertEquals("title", client.text("title"))
+        // Nor is it shown when the SDK is set up again in the same run.
+        val again = h.launch(continuing = client, configure = nextLaunch)
+        assertNull(again.version)
+        assertEquals(Status.DOWNLOADED, again.refreshNow().status)
+        assertNull(again.version)
         offline(h)
         assertEquals("two", h.launch(configure = nextLaunch).text("title"))
+    }
+
+    /**
+     * A refresh that reads the stored release at last and starts showing it
+     * has changed the texts, whether or not anything newer is published.
+     */
+    @Test
+    fun aRefreshThatStartsShowingTheStoredReleaseSaysSo() {
+        for (policy in UpdatePolicy.values()) {
+            val root = folder.newFolder()
+            val h = Harness(root)
+            h.launchWith("en" to """{ "title": "one" }""")
+            val state = File(File(root, SLUG), ReleaseStore.STATE_FILE)
+            assertTrue(state.setReadable(false))
+            val client = h.launch { updatePolicy(policy) }
+            assertEquals("title", client.text("title"))
+
+            assertTrue(state.setReadable(true))
+            val result = client.refreshNow()
+
+            assertEquals(policy.name, Status.APPLIED, result.status)
+            assertEquals("one", client.text("title"))
+            // Nothing changes at the one after it.
+            assertEquals(policy.name, Status.UP_TO_DATE, client.refreshNow().status)
+        }
+    }
+
+    /**
+     * A folder on the way to the stored files that cannot be entered hides
+     * them just as a locked file does. That is not an empty device: nothing
+     * is thrown away, and the run starts from them once they can be read.
+     */
+    @Test
+    fun aStoredReleaseInAFolderThatCannotBeEnteredIsNotTakenForNone() {
+        val nextLaunch: LocalizeConfig.Builder.() -> Unit = { updatePolicy(UpdatePolicy.NEXT_LAUNCH) }
+        for (closed in listOf("the cache folder", "the project folder")) {
+            val root = folder.newFolder()
+            val h = Harness(root)
+            h.launchWith("en" to """{ "title": "one" }""")
+            offline(h)
+            val shut = if (closed == "the cache folder") root else File(root, SLUG)
+            assertTrue(shut.setExecutable(false))
+            val locked = try {
+                h.launch(configure = nextLaunch).also { assertNull(closed, it.version) }
+            } finally {
+                assertTrue(shut.setExecutable(true))
+            }
+            assertEquals(closed, setOf("state.json", "v1.json"), File(root, SLUG).list()!!.toSet())
+
+            val unlocked = h.launch(continuing = locked, configure = nextLaunch)
+
+            assertEquals(closed, "v1", unlocked.version)
+            assertEquals(closed, "one", unlocked.text("title"))
+        }
+    }
+
+    /** A device with no folder for the project yet has nothing stored, and that much can be told. */
+    @Test
+    fun noFolderAtAllIsNothingStoredAndReadable() {
+        val root = File(folder.root, "not/yet/there")
+        val store = ReleaseStore(root, SLUG, CDN)
+
+        val stored = store.read()
+
+        assertNull(stored.release)
+        assertTrue(stored.readable)
+        // A file where the folder should be holds nothing either, and is thrown away.
+        val notAFolder = ReleaseStore(folder.root, "blocked", CDN)
+        notAFolder.directory.writeText("not a folder")
+        assertTrue(notAFolder.read().readable)
+        assertFalse(notAFolder.directory.exists())
+    }
+
+    /**
+     * The same folder written another way is the same folder: the run goes
+     * on from what it holds, and what it downloaded keeps waiting.
+     */
+    @Test
+    fun anotherSpellingOfTheCacheFolderIsTheSameRun() {
+        val root = folder.newFolder("cache")
+        val h = Harness(root)
+        val nextLaunch: LocalizeConfig.Builder.() -> Unit = { updatePolicy(UpdatePolicy.NEXT_LAUNCH) }
+        h.launchWith("en" to """{ "title": "one" }""")
+        var client = h.launch(configure = nextLaunch)
+        h.transport.pointer("v2")
+        h.transport.file("v2", "en", """{ "title": "two" }""")
+        assertEquals(Status.DOWNLOADED, client.refreshNow().status)
+        val link = File(folder.root, "link")
+        java.nio.file.Files.createSymbolicLink(link.toPath(), root.toPath())
+
+        for (spelling in listOf(File(root, "."), File(root, "$SLUG/.."), File(folder.root, "other/../cache"), link)) {
+            client = h.launch(continuing = client, root = spelling, configure = nextLaunch)
+
+            assertEquals(spelling.path, "v1", client.version)
+            assertEquals(spelling.path, "one", client.text("title"))
+        }
+        offline(h)
+        assertEquals("two", h.launch(configure = nextLaunch).text("title"))
+    }
+
+    /**
+     * Files of the release the run reads that the device refused are not
+     * owed to it any more once a newer release waits there: the next launch
+     * reads that one, and has every file of the locale.
+     */
+    @Test
+    fun filesTheDeviceRefusedAreNotMissedOnceANewerReleaseWaits() {
+        val h = Harness(folder.root)
+        val french: LocalizeConfig.Builder.() -> Unit = {
+            updatePolicy(UpdatePolicy.NEXT_LAUNCH)
+            fallbackLocale("en")
+        }
+        h.launchWith("en" to """{ "title": "one" }""")
+        h.transport.file("v1", "fr", """{ "title": "un" }""")
+        val client = h.launch(configure = french)
+        assertTrue(projectFolder().setWritable(false))
+        try {
+            client.setLocale("fr", null)
+            assertEquals("un", client.text("title"))
+        } finally {
+            assertTrue(projectFolder().setWritable(true))
+        }
+        h.transport.pointer("v2")
+        h.transport.file("v2", "en", """{ "title": "two" }""")
+        h.transport.file("v2", "fr", """{ "title": "deux" }""")
+
+        assertEquals(Status.DOWNLOADED, client.refreshNow().status)
+        assertEquals("un", client.text("title"))
+        // No write is owed at the refreshes after it, and none is made.
+        val written = File(projectFolder(), "v2.json").lastModified()
+        assertEquals(Status.DOWNLOADED, client.refreshNow().status)
+        assertEquals(written, File(projectFolder(), "v2.json").lastModified())
+
+        offline(h)
+        val next = h.launch("fr", configure = french)
+        assertEquals("v2", next.version)
+        assertEquals("deux", next.text("title"))
     }
 
     /**

@@ -1164,6 +1164,37 @@ class UpdatesTest {
         assertTrue(heard.isEmpty())
     }
 
+    /**
+     * A listener may set the SDK up again as it hears of a change. The
+     * listeners after it are then told nothing of the client that was
+     * replaced: its version is not the one of the texts the app shows now.
+     */
+    @Test
+    fun aListenerThatSetsTheSdkUpAgainEndsTheTellingOfTheOldClient() {
+        val h = Harness(folder.root)
+        h.transport.pointer("v1")
+        h.transport.file("v1", "en", """{ "title": "one" }""")
+        val listeners = CopyOnWriteArrayList<LocalizeListener>()
+        lateinit var client: LocalizeClient
+        listeners.add(LocalizeListener { client.close() })
+        listeners.add(LocalizeListener { version -> heard.add(version) })
+        client = LocalizeClient(
+            config = LocalizeConfig(SLUG) { cdnBaseUrl(CDN) },
+            cacheRoot = folder.root,
+            deviceLocale = "en",
+            transport = h.transport,
+            bundled = { _, _ -> null },
+            worker = { it.run() },
+            callbacks = { it.run() },
+            listeners = listeners,
+            sleeper = { },
+        )
+
+        client.refreshNow()
+
+        assertTrue(heard.isEmpty())
+    }
+
     @Test
     fun aReplacedClientChangesNothingFurther() {
         val h = Harness(folder.root)

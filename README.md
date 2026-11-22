@@ -117,13 +117,18 @@ when it suits your app, for example when it comes back to the foreground:
 ```kotlin
 Localize.refresh { result ->
     when (result.status) {
-        RefreshResult.Status.APPLIED -> { /* new texts are in use */ }
+        RefreshResult.Status.APPLIED -> { /* other texts are in use: redraw */ }
         RefreshResult.Status.DOWNLOADED -> { /* stored for the next launch */ }
         RefreshResult.Status.UP_TO_DATE -> { /* nothing new */ }
         RefreshResult.Status.FAILED -> Log.w("App", "refresh failed", result.error)
     }
 }
 ```
+
+`APPLIED` says that lookups read other texts now. That is a new release in use,
+and also the release the run started with when this refresh made it usable: it
+fetched the files it lacked for the locale, or could read it from the device at
+last.
 
 Listeners and callbacks are called on the main thread.
 
@@ -354,10 +359,11 @@ the refresh fails.
 private storage (`no_backup/localize-work/`), and `init` loads it before it
 returns. The app therefore starts with its texts and works offline. Older
 releases are deleted. A stored release that is damaged is thrown away and
-downloaded again; it never crashes the app. Files that are there but cannot be
-read at all, as while the device's storage is locked, are left alone and read
-again later. Releases are stored per project, and a change of `cdnBaseUrl`
-discards them.
+downloaded again; it never crashes the app. Files that cannot be looked at,
+because the device's storage is locked or their folder cannot be entered, are
+left alone and read again later. Releases are stored per project, and a change
+of `cdnBaseUrl` discards them. The same `cacheDirectory` written another way,
+through a symbolic link or with `/.` in the path, is the same folder.
 
 A configuration pinned to a `version` shares the project's folder with one that
 follows `latest.json`, and each leaves only its own releases there. A refresh
@@ -383,7 +389,9 @@ release the app shows:
    the first one again shows what it showed of the first one before. Stored
    files that cannot be read when the app starts are not "nothing stored": the
    SDK reads them again at the next `Localize.init` or refresh, and what it
-   finds then is the release of the run.
+   finds then is the release of the run. Unless the run has stored a release
+   over them by then: that one was downloaded in this run, and waits for the
+   next start like any other.
 2. A release is read only once it has every file the language needs. A stored
    release that lacks files for the language, because the language changed
    before this start or during the run, is still the release of this run: the
@@ -427,8 +435,9 @@ Calling `Localize.init` again replaces the configuration. The earlier one
 stops: it puts nothing more in use and stores nothing, so it cannot write over
 what the new one stores, and a refresh it still has under way reports only
 that it was replaced, also when its result was already on its way to the main
-thread; a change it was about to tell listeners of is not passed on. The new
-one goes on from what this run of the app holds of its project.
+thread; a change it was about to tell listeners of is not passed on, nor is it
+passed on to the listeners after one that called `Localize.init` itself. The
+new one goes on from what this run of the app holds of its project.
 
 A release the device could not take is used from memory, and the next refresh
 stores it. With `IMMEDIATE` that is any release. With `NEXT_LAUNCH` it is more

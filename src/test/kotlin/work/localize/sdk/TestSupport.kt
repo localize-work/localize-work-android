@@ -60,22 +60,25 @@ internal class Harness(private val cacheRoot: File, val transport: FakeTransport
      * A new client: what a launch of the app gets from `Localize.init`. With
      * [continuing], what a later `Localize.init` in the same run gets: the
      * earlier client is closed first, as `Localize.init` does, and the new
-     * one is part of the same run of the app.
+     * one is part of the same run of the app. [root] is the cache folder as
+     * this configuration writes its path.
      */
     fun launch(
         deviceLocale: String = "en",
         continuing: LocalizeClient? = null,
         slug: String = SLUG,
+        root: File = cacheRoot,
         configure: LocalizeConfig.Builder.() -> Unit = {},
     ): LocalizeClient {
         continuing?.close()
-        return client(deviceLocale, continuing, slug, configure)
+        return client(deviceLocale, continuing, slug, root, configure)
     }
 
     private fun client(
         deviceLocale: String,
         continuing: LocalizeClient?,
         slug: String,
+        root: File,
         configure: LocalizeConfig.Builder.() -> Unit,
     ): LocalizeClient =
         LocalizeClient(
@@ -83,7 +86,7 @@ internal class Harness(private val cacheRoot: File, val transport: FakeTransport
                 cdnBaseUrl(CDN)
                 configure()
             },
-            cacheRoot = cacheRoot,
+            cacheRoot = root,
             deviceLocale = deviceLocale,
             transport = transport,
             bundled = { name, count ->

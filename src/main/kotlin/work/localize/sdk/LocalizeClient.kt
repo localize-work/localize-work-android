@@ -67,7 +67,7 @@ internal class LocalizeClient(
 
     init {
         val locale = LocaleTags.canonicalize(config.locale ?: deviceLocale).ifEmpty { "und" }
-        val key = AppRun.Key(store.directory, config.cdnBaseUrl, config.version)
+        val key = AppRun.Key(store.folderIdentity, config.cdnBaseUrl, config.version)
         // The release a run shows is decided when the app starts, and that
         // is the first time the run asks for this project: what the device
         // holds then, where a release that waited becomes the one in use.
@@ -212,9 +212,10 @@ internal class LocalizeClient(
      * for the locale it is in now.
      */
     private fun refreshLocked(): RefreshResult {
-        startFromDevice()
+        // Whether this refresh has changed what lookups read, before or
+        // while it looked for anything newer.
+        var applied = startFromDevice()
         val facts = Facts()
-        var applied = false
         repeat(MAX_LOCALE_CHANGES) {
             if (closed) return replaced(facts.version)
             val view = snapshot
@@ -223,7 +224,9 @@ internal class LocalizeClient(
             applied = applied || pass.completedHeld || pass.result?.status == RefreshResult.Status.APPLIED
             val result = pass.result
             if (result != null && stillHolds(view)) {
-                // Nothing newer is published, but files this refresh fetched are in use now.
+                // Nothing newer is published, but lookups read other texts
+                // now: files this refresh fetched, or the stored release it
+                // could read at last.
                 val upToDate = result.status == RefreshResult.Status.UP_TO_DATE
                 return if (applied && upToDate) RefreshResult(RefreshResult.Status.APPLIED, result.version, null) else result
             }
@@ -251,13 +254,17 @@ internal class LocalizeClient(
         return true
     }
 
-    /** [lookAgain] for a client in use: the release found is read at once when it is whole for the locale. */
-    private fun startFromDevice() {
+    /**
+     * [lookAgain] for a client in use: the release found is read at once when
+     * it is whole for the locale. Returns whether that changed what lookups read.
+     */
+    private fun startFromDevice(): Boolean {
         val usable = synchronized(project) {
-            if (closed || !lookAgain()) return
+            if (closed || !lookAgain()) return false
             project.held?.let(::hold)?.usable
-        }
-        if (usable != null) notifyListeners(usable.version)
+        } ?: return false
+        notifyListeners(usable.version)
+        return true
     }
 
     /**
@@ -555,12 +562,17 @@ internal class LocalizeClient(
         }
     }
 
-    /** Tells the listeners of a change. A client that was replaced meanwhile tells them nothing. */
+    /**
+     * Tells the listeners of a change. A client that was replaced meanwhile
+     * tells them nothing, and one that a listener replaces, by setting the
+     * SDK up again as it hears of the change, tells the rest nothing.
+     */
     private fun notifyListeners(version: String?) {
         if (listeners.isEmpty()) return
         onCallbacks { live ->
             if (!live) return@onCallbacks
             for (listener in listeners) {
+                if (closed) break
                 try {
                     listener.onStringsChanged(version)
                 } catch (failure: RuntimeException) {

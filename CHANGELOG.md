@@ -14,7 +14,8 @@ The first release.
 - Switches to a downloaded release only when all of its files have arrived,
   either at once or at the next launch of the app.
 - Keeps the last complete release on the device, so texts are available at
-  start and without a connection; a cache that cannot be read is discarded. A
+  start and without a connection; a damaged cache is discarded, and one that
+  cannot be read at the moment is left alone and read again later. A
   stored release is read only when it has every file the current locale needs
   and, with a pinned version, is that version.
 - Looks a text up in the locale, its base language and a fallback locale, with
