@@ -1,0 +1,6 @@
+# Build settings for https://jitpack.io, which builds a tag of this repository
+# on demand and serves it as com.github.localize-work:localize-work-android:<tag>.
+jdk:
+  - openjdk17
+install:
+  - ./gradlew --no-daemon -Pgroup=$GROUP -Pversion=$VERSION publishToMavenLocal
