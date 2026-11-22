@@ -61,7 +61,11 @@ public class RefreshResult internal constructor(
         /** The release already in use is the current one; nothing changed. */
         UP_TO_DATE,
 
-        /** The download failed; the release already in use stays in use. */
+        /**
+         * The download failed; the release already in use stays in use. After
+         * a change of locale, files of the release the app holds may have
+         * been added for the new locale all the same; listeners are told.
+         */
         FAILED,
     }
 

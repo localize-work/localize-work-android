@@ -345,7 +345,10 @@ releases are never mixed.
 
 **All or nothing.** A release takes effect only when every file it needs has
 arrived. If one download fails, the refresh fails and the release already in
-use stays in use.
+use stays in use. One thing may have changed all the same: after a change of
+language, the files the stored release lacked for the new language are fetched
+from that same release first, and are shown and stored even when the rest of
+the refresh fails.
 
 **Stored on the device.** The last complete release is kept in the app's
 private storage (`no_backup/localize-work/`), and `init` loads it before it
@@ -363,15 +366,17 @@ the app shows its bundled strings until it is started again.
 A change of language does not end the run, and by itself never changes which
 release the app shows:
 
-1. The release a run shows is decided when the app starts: the stored release
-   if it is whole for the language, otherwise none. With `NEXT_LAUNCH` it
-   changes only at the next start, also after `setLocale` or after
-   `Localize.init` is called again. A run that started with no release shows
-   bundled strings to its end.
-2. After a change of language, the files that release lacks for the new
-   language are fetched from that same release and added to it, since no text
-   the app already shows from it changes. This needs neither the newest
-   release nor `latest.json` to be reachable.
+1. The release a run shows is decided when the app starts: it is the stored
+   release. With `NEXT_LAUNCH` it changes only at the next start, also after
+   `setLocale` or after `Localize.init` is called again, and a run that started
+   with nothing stored shows bundled strings to its end.
+2. A release is read only once it has every file the language needs. A stored
+   release that lacks files for the language, because the language changed
+   before this start or during the run, is still the release of this run: the
+   app shows bundled strings only until the missing files have arrived. They
+   are fetched from that same release and added to it, since no text the app
+   already shows from it changes. This needs neither the newest release nor
+   `latest.json` to be reachable.
 3. A newer release is handled as always: with `NEXT_LAUNCH` it waits for the
    next start, with `IMMEDIATE` it is used once it is complete. If it cannot
    be downloaded, the refresh reports the failure, and step 2 still holds.
@@ -381,15 +386,18 @@ depends on whether the release is known to be the published one:
 
 - Once `latest.json` has named that release, it is read like any other: a file
   it does not have counts as empty, and the texts come from the fallback
-  locale. A start in that language reads the same.
+  locale. A start in that language reads the same. A pinned `version` names
+  the release in the same way, and `latest.json` is not read at all.
 - Until then the app shows its bundled strings. That is while `latest.json`
   cannot be read, and with `NEXT_LAUNCH` also while it names a newer release,
   which waits for the next start. A release that answers "not found" for every
   file of a language may also be one the CDN no longer keeps, and the bundled
-  strings are in the user's language.
+  strings are in the user's language. A file of the fallback locale does not
+  count as an answer here: it says nothing about the new language.
 
 A regional locale such as `en-FI` needs no file of its own for any of this:
-the release's `en` texts are enough.
+the release's `en` texts are enough. The same goes for a namespace the release
+has no file for in a language it otherwise has texts in.
 
 Calling `Localize.init` again replaces the configuration. The earlier one
 stops: a download it still has under way stores nothing, so it cannot write

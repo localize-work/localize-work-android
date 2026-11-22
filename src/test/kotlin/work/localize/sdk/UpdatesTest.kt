@@ -485,6 +485,114 @@ class UpdatesTest {
     }
 
     /**
+     * A file of the fallback locale says nothing about the locale asked for.
+     * A release that answers "not found" for every Italian file is not read
+     * in German in place of the app's bundled Italian strings, until the
+     * pointer has named it.
+     */
+    @Test
+    fun aFallbackLocaleFileDoesNotVouchForAReleaseWithoutTheNewLocale() {
+        for (policy in UpdatePolicy.values()) {
+            val h = Harness(folder.newFolder())
+            h.transport.file("v1", "de", """{ "title": "Hallo" }""")
+            val first = h.launchWith("en" to """{ "title": "Hello" }""")
+            h.transport.status(POINTER_URL, 503)
+
+            val client = h.launch(deviceLocale = "it", continuing = first) {
+                updatePolicy(policy)
+                fallbackLocale("de")
+            }
+
+            assertEquals(policy.name, Status.FAILED, client.refreshNow().status)
+            assertNull(policy.name, client.version)
+            assertEquals(policy.name, "Ciao (bundled)", client.text("title", fallback = "Ciao (bundled)"))
+
+            h.transport.pointer("v1")
+            assertEquals(policy.name, Status.APPLIED, client.refreshNow().status)
+            assertEquals(policy.name, "Hallo", client.text("title", fallback = "Ciao (bundled)"))
+        }
+    }
+
+    /**
+     * The release already has texts of the locale; a namespace it has no file
+     * for in that locale is an empty file, as for a regional locale.
+     */
+    @Test
+    fun aReleaseWithTextsOfTheLocaleIsCompletedForANamespaceItLacks() {
+        val h = Harness(folder.root)
+        h.launchWith("it" to """{ "title": "Ciao" }""")
+        h.transport.status(POINTER_URL, 503)
+
+        val client = h.launch(deviceLocale = "it") { namespaces("translation", "extra") }
+
+        assertNull(client.version)
+        assertEquals(Status.FAILED, client.refreshNow().status)
+        assertEquals("v1", client.version)
+        assertEquals("Ciao", client.text("title"))
+    }
+
+    /**
+     * A pinned version is named by the configuration, as `latest.json` names
+     * the latest one: a locale it has no file for reads the fallback locale,
+     * without the pointer.
+     */
+    @Test
+    fun aPinnedVersionWithoutTheNewLocaleIsReadInTheFallbackLocale() {
+        val h = Harness(folder.root)
+        h.launchWith("en" to """{ "title": "Hello" }""")
+        h.transport.status(POINTER_URL, 503)
+        val client = h.launch {
+            version("v1")
+            fallbackLocale("en")
+        }
+        val results = ArrayList<RefreshResult>()
+
+        client.setLocale("fr", results::add)
+
+        assertEquals(Status.APPLIED, results.single().status)
+        assertEquals("Hello", client.text("title", fallback = "Bonjour (bundled)"))
+        assertEquals(1, h.transport.pointerRequests)
+    }
+
+    /**
+     * A pinned release, nothing on the device yet, and the locale switched
+     * while the first file is on its way. That file is there but empty: the
+     * release is published, and is not taken for one that is not.
+     */
+    @Test
+    fun aPinnedReleaseWithAnEmptyFileIsNotTakenForUnpublishedAfterALocaleSwitch() {
+        val h = Harness(folder.root)
+        h.transport.file("v1", "en", "{}")
+        val queued = ArrayList<Runnable>()
+        val client = LocalizeClient(
+            config = LocalizeConfig(SLUG) {
+                cdnBaseUrl(CDN)
+                version("v1")
+                fallbackLocale("en")
+            },
+            cacheRoot = folder.root,
+            deviceLocale = "en",
+            transport = h.transport,
+            bundled = { _, _ -> null },
+            worker = { queued.add(it) },
+            callbacks = { it.run() },
+            sleeper = { },
+        )
+        h.transport.onRequest = { url ->
+            if (url == fileUrl("v1", "en")) {
+                h.transport.onRequest = {}
+                client.setLocale("et", null)
+            }
+        }
+
+        val result = client.refreshNow()
+
+        assertEquals(Status.APPLIED, result.status)
+        assertEquals("v1", client.version)
+        assertEquals(listOf(fileUrl("v1", "en"), fileUrl("v1", "et")), h.transport.requests.toList())
+    }
+
+    /**
      * The release could not be stored, so it is in use from memory only.
      * Setting the SDK up again for another locale is still the same run: the
      * new client goes on from that release and needs only the new locale's
@@ -624,6 +732,30 @@ class UpdatesTest {
         h.transport.pointer("v2")
         assertEquals(Status.APPLIED, replacement!!.refreshNow().status)
         assertEquals("Hello v2", h.launch().text("title"))
+    }
+
+    /**
+     * Set up again while the earlier client is fetching the new locale's
+     * files of the release it holds: when they arrive, the earlier client
+     * puts nothing in use, tells no listener, and reports that it was replaced.
+     */
+    @Test
+    fun aClientReplacedWhileItCompletesTheReleaseHeldPutsNothingInUse() {
+        val h = Harness(folder.root)
+        h.transport.file("v1", "fr", """{ "title": "Bonjour" }""")
+        h.launchWith("en" to """{ "title": "Hello" }""")
+        h.transport.status(POINTER_URL, 503)
+        val old = h.listeningClient(deviceLocale = "fr") { fallbackLocale("en") }
+        h.transport.onRequest = { url ->
+            if (url == fileUrl("v1", "fr")) old.close()
+        }
+
+        val result = old.refreshNow()
+
+        assertEquals(Status.FAILED, result.status)
+        assertEquals(LocalizeException.Reason.NOT_INITIALIZED, result.error?.reason)
+        assertNull(old.version)
+        assertTrue(heard.isEmpty())
     }
 
     @Test

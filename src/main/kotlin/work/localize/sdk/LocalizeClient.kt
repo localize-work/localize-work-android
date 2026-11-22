@@ -189,10 +189,10 @@ internal class LocalizeClient(
         // it lacks the new locale's files; they come from that same version,
         // whatever is published now and whether or not the pointer or a
         // newer release can be reached.
-        val startChain = snapshot.chain
-        val completedHeld = completeReleaseInUse(startChain)
+        val start = snapshot
+        val completedHeld = completeReleaseInUse(start)
         var completedLater = false
-        var chain = startChain
+        var view = start
         var version: String? = null
         val result = try {
             val resolved = loader.resolveVersion()
@@ -202,11 +202,12 @@ internal class LocalizeClient(
             // was fetched for the earlier locale is then not a whole release
             // for the current one, so the rest is fetched from the same
             // version before anything is put in use.
-            var fetched: Map<String, Map<String, NamespaceTree>> = emptyMap()
+            var fetched: Download? = null
             for (attempt in 1..MAX_LOCALE_CHANGES) {
+                val chain = view.chain
                 // After a switch of locale the release held comes first, as
                 // it does at the start of a refresh.
-                if (chain != startChain && completeReleaseInUse(chain)) completedLater = true
+                if (chain != start.chain && completeReleaseInUse(view)) completedLater = true
                 // Files of an immutable version the app already holds are not
                 // fetched again. A version the pointer (or the pin) names is
                 // there, so a file it does not have is an empty file, and
@@ -226,14 +227,14 @@ internal class LocalizeClient(
                         status = 404,
                     )
                 }
-                fetched = download.files
+                fetched = download
                 if (closed) {
                     switched = replaced(resolved)
                     break
                 }
-                switched = switchTo(resolved, fetched)
+                switched = switchTo(resolved, download.files)
                 if (switched != null) break
-                chain = snapshot.chain
+                view = snapshot
             }
             switched ?: failed(
                 resolved,
@@ -244,11 +245,14 @@ internal class LocalizeClient(
         } catch (failure: RuntimeException) {
             failed(version, LocalizeException(Reason.INVALID_RESPONSE, "refresh failed: $failure", cause = failure))
         }
+        // Whatever went wrong for a client that was replaced meanwhile, its
+        // caller should hear that it was replaced.
+        if (closed && result.status == RefreshResult.Status.FAILED) return replaced(result.version)
         // The locale was switched while this refresh ran, and the refresh
         // ended before it came to that: the release held gets the newer
         // locale's files as well.
-        val current = snapshot.chain
-        if (current != startChain && !closed && completeReleaseInUse(current)) completedLater = true
+        val current = snapshot
+        if (current.chain != start.chain && !closed && completeReleaseInUse(current)) completedLater = true
         if ((completedHeld || completedLater) && result.status == RefreshResult.Status.UP_TO_DATE) {
             // Nothing newer is published, but files this refresh fetched are in use now.
             return RefreshResult(RefreshResult.Status.APPLIED, result.version, null)
@@ -256,51 +260,59 @@ internal class LocalizeClient(
         return result
     }
 
-    private class Download(val files: Map<String, Map<String, NamespaceTree>>, val foundNothing: Boolean)
+    /**
+     * @param files what was fetched; a file the release does not have (a 404)
+     *   is here as an empty one
+     * @param answered the locales the release did have a file for, which may
+     *   itself be empty. Kept apart from [files], where the two look alike.
+     */
+    private class Download(val files: Map<String, Map<String, NamespaceTree>>, val answered: Set<String>) {
+        val foundNothing: Boolean get() = files.isNotEmpty() && answered.isEmpty()
+    }
 
     /**
      * Fetches the files of [version] that [chain] and the namespaces need and
      * [held] and [already] lack. Throws when one of them cannot be had, so
      * the caller gets all of them or none.
      */
-    private fun download(
-        version: String,
-        chain: List<String>,
-        held: Release?,
-        already: Map<String, Map<String, NamespaceTree>> = emptyMap(),
-    ): Download {
+    private fun download(version: String, chain: List<String>, held: Release?, already: Download? = null): Download {
         val files = LinkedHashMap<String, MutableMap<String, NamespaceTree>>()
-        for ((locale, namespaces) in already) files[locale] = LinkedHashMap(namespaces)
-        var found = already.values.any { namespaces -> namespaces.values.any { it.isNotEmpty() } }
+        for ((locale, namespaces) in already?.files.orEmpty()) files[locale] = LinkedHashMap(namespaces)
+        val answered = LinkedHashSet(already?.answered.orEmpty())
         for (locale in chain) {
             for (namespace in config.namespaces) {
                 if (held?.has(locale, namespace) == true) continue
                 if (files[locale]?.containsKey(namespace) == true) continue
                 val tree = loader.fetchFile(version, locale, namespace)
-                if (tree != null) found = true
+                if (tree != null) answered.add(locale)
                 files.getOrPut(locale) { LinkedHashMap() }[namespace] = tree ?: emptyMap()
             }
         }
-        return Download(files, foundNothing = files.isNotEmpty() && !found)
+        return Download(files, answered)
     }
 
     /**
-     * Makes the release the app holds whole for [chain], from its own
-     * version, and returns whether that put it in use. A change of locale
+     * Makes the release the app holds whole for the locale of [view], from its
+     * own version, and returns whether that put it in use. A change of locale
      * never changes which version is shown: the files the release lacks for
      * the new locale are fetched from that same release, since adding files
      * of the version already shown changes no text on screen and mixes
      * nothing. Nothing is thrown: when the files cannot be had now, the app
      * shows bundled strings and the next refresh tries again.
      *
-     * When none of the missing files exists, the release may be gone from the
-     * CDN, and reading it with empty files would show its fallback language
-     * in place of the app's bundled strings. It is completed all the same
-     * when every locale that lacks files is a regional form of a language the
-     * release has texts for: a regional locale without overrides of its own
-     * has no file, and that is normal.
+     * When none of the missing files of the locale asked for exists, the
+     * release may be gone from the CDN, or have nothing in that language, and
+     * reading it with empty files would show its fallback language in place
+     * of the app's bundled strings. A file of the fallback locale says
+     * nothing about that. The release is completed all the same when it
+     * already has texts for every locale of the language that lacks files,
+     * in that locale or a shorter form of it: a regional locale without
+     * overrides of its own has no file, and that is normal.
      */
-    private fun completeReleaseInUse(chain: List<String>): Boolean {
+    private fun completeReleaseInUse(view: Snapshot): Boolean {
+        val chain = view.chain
+        // The locale asked for and its shorter forms, without the fallback locale.
+        val asked = LocaleTags.chain(view.locale, null)
         val active = snapshot.release ?: return false
         if (active.hasAll(chain, config.namespaces)) return false
         val more = try {
@@ -311,7 +323,8 @@ internal class LocalizeClient(
             return false
         }
         if (closed) return false
-        if (more.foundNothing && !more.files.keys.all { isRegionalFormOfHeldLanguage(active, it) }) return false
+        val lacking = more.files.keys.filter { it in asked }
+        if (more.answered.none { it in asked } && !lacking.all { hasTextsFor(active, it) }) return false
         val usable = synchronized(stateLock) {
             val current = snapshot
             // The release may have been replaced while the files were on their way.
@@ -326,9 +339,10 @@ internal class LocalizeClient(
         return usable
     }
 
-    private fun isRegionalFormOfHeldLanguage(release: Release, locale: String): Boolean =
-        LocaleTags.parents(locale).any { parent ->
-            config.namespaces.any { namespace -> release.tree(parent, namespace)?.isNotEmpty() == true }
+    /** Whether [release] has texts in [locale] or a shorter form of it. */
+    private fun hasTextsFor(release: Release, locale: String): Boolean =
+        (listOf(locale) + LocaleTags.parents(locale)).any { form ->
+            config.namespaces.any { namespace -> release.tree(form, namespace)?.isNotEmpty() == true }
         }
 
     /**

@@ -135,8 +135,11 @@ public object Localize {
     /**
      * Downloads the project's current release in the background.
      *
-     * [callback] is called on the main thread with the outcome. A failed
-     * download changes nothing: the release already in use stays in use.
+     * [callback] is called on the main thread with the outcome. After a
+     * failed download the release already in use stays in use. One thing may
+     * have changed all the same: after a change of locale, the files the
+     * release the app holds lacked for the new locale are fetched from that
+     * same version first, and are used and stored even when the rest fails.
      */
     @JvmStatic
     @JvmOverloads
