@@ -377,6 +377,194 @@ class CacheTest {
         assertEquals("two", pinned.text("title"))
     }
 
+    /**
+     * A release waits for the next launch. The app is then set up pinned to
+     * the version in use, which shares the folder and leaves only that
+     * version there, and after that as before. What the device holds decides
+     * whether a release waits: it is stored again, and reported as
+     * downloaded only then.
+     */
+    @Test
+    fun aWaitingReleaseTheDeviceNoLongerHoldsIsStoredAgain() {
+        val h = Harness(folder.root)
+        val nextLaunch: LocalizeConfig.Builder.() -> Unit = { updatePolicy(UpdatePolicy.NEXT_LAUNCH) }
+        h.launchWith("en" to """{ "title": "one" }""")
+        val run = h.launch(configure = nextLaunch)
+        h.transport.pointer("v2")
+        h.transport.file("v2", "en", """{ "title": "two" }""")
+        assertEquals(Status.DOWNLOADED, run.refreshNow().status)
+
+        val preview = h.launch(continuing = run) { nextLaunch(); version("v1") }
+        assertEquals("one", preview.text("title"))
+        assertEquals(setOf("state.json", "v1.json"), projectFolder().list()!!.toSet())
+        val back = h.launch(continuing = preview, configure = nextLaunch)
+        assertEquals("one", back.text("title"))
+        h.transport.requests.clear()
+
+        assertEquals(Status.DOWNLOADED, back.refreshNow().status)
+
+        assertEquals("one", back.text("title"))
+        assertEquals(setOf("state.json", "v1.json", "v2.json"), projectFolder().list()!!.toSet())
+        // From memory: nothing but the pointer is asked for.
+        assertEquals(listOf(POINTER_URL), h.transport.requests)
+        offline(h)
+        assertEquals("two", h.launch(configure = nextLaunch).text("title"))
+    }
+
+    /**
+     * The same for the release in use: a preview pinned to another version
+     * left that one on the device. The run still reads its own release, and
+     * an up-to-date refresh puts it back for the next launch.
+     */
+    @Test
+    fun theReleaseInUseTheDeviceNoLongerHoldsIsStoredAgain() {
+        val h = Harness(folder.root)
+        val nextLaunch: LocalizeConfig.Builder.() -> Unit = { updatePolicy(UpdatePolicy.NEXT_LAUNCH) }
+        h.launchWith("en" to """{ "title": "one" }""")
+        val run = h.launch(configure = nextLaunch)
+        h.transport.file("v3", "en", """{ "title": "three" }""")
+        val preview = h.launch(continuing = run) { version("v3") }
+        assertEquals(Status.APPLIED, preview.refreshNow().status)
+        assertEquals(setOf("state.json", "v3.json"), projectFolder().list()!!.toSet())
+
+        val back = h.launch(continuing = preview, configure = nextLaunch)
+        assertEquals("one", back.text("title"))
+        assertEquals(Status.UP_TO_DATE, back.refreshNow().status)
+
+        assertEquals(setOf("state.json", "v1.json"), projectFolder().list()!!.toSet())
+        offline(h)
+        assertEquals("one", h.launch(configure = nextLaunch).text("title"))
+    }
+
+    /**
+     * Files of a version never change, so a write keeps the ones the device
+     * already has of it: those another configuration of the app stored, for
+     * another locale say.
+     */
+    @Test
+    fun filesAlreadyStoredOfAReleaseAreKeptWhenMoreAreWritten() {
+        fun release(locale: String) =
+            Release("v1", mapOf(locale to mapOf("translation" to mapOf<String, Any?>("title" to locale))))
+        assertTrue(ReleaseStore(folder.root, SLUG, CDN).save("v1", null, release("en")))
+
+        assertTrue(ReleaseStore(folder.root, SLUG, CDN).save("v1", null, release("de")))
+
+        val stored = ReleaseStore(folder.root, SLUG, CDN).load()!!
+        assertTrue(stored.has("en", "translation"))
+        assertTrue(stored.has("de", "translation"))
+    }
+
+    /**
+     * The stored files are there but cannot be read when the app starts.
+     * They are left alone, and the run has not started with nothing: it
+     * could not look. Set up again once they can be read, it starts from the
+     * stored release.
+     */
+    @Test
+    fun aStoredReleaseThatCouldNotBeReadAtFirstIsTheOneTheRunStartsWith() {
+        val h = Harness(folder.root)
+        val nextLaunch: LocalizeConfig.Builder.() -> Unit = { updatePolicy(UpdatePolicy.NEXT_LAUNCH) }
+        h.launchWith("en" to """{ "title": "one" }""")
+        val state = File(projectFolder(), ReleaseStore.STATE_FILE)
+        assertTrue(state.setReadable(false))
+        offline(h)
+
+        val locked = h.launch(configure = nextLaunch)
+        assertNull(locked.version)
+        assertEquals("title", locked.text("title"))
+        assertEquals(setOf("state.json", "v1.json"), projectFolder().list()!!.toSet())
+
+        assertTrue(state.setReadable(true))
+        val unlocked = h.launch(continuing = locked, configure = nextLaunch)
+
+        assertEquals("v1", unlocked.version)
+        assertEquals("one", unlocked.text("title"))
+    }
+
+    /**
+     * The same without setting the SDK up again: the next refresh reads the
+     * device once more, and what it finds is the release of this run. A
+     * newer one still waits for the next launch.
+     */
+    @Test
+    fun aRefreshStartsFromAStoredReleaseThatCouldNotBeReadAtFirst() {
+        val h = Harness(folder.root)
+        val nextLaunch: LocalizeConfig.Builder.() -> Unit = { updatePolicy(UpdatePolicy.NEXT_LAUNCH) }
+        h.launchWith("en" to """{ "title": "one" }""")
+        val state = File(projectFolder(), ReleaseStore.STATE_FILE)
+        assertTrue(state.setReadable(false))
+        val client = h.launch(configure = nextLaunch)
+        assertNull(client.version)
+
+        assertTrue(state.setReadable(true))
+        h.transport.pointer("v2")
+        h.transport.file("v2", "en", """{ "title": "two" }""")
+        assertEquals(Status.DOWNLOADED, client.refreshNow().status)
+
+        assertEquals("v1", client.version)
+        assertEquals("one", client.text("title"))
+        // It is the run's release for a client that follows, too.
+        assertEquals("one", h.launch(continuing = client, configure = nextLaunch).text("title"))
+        offline(h)
+        assertEquals("two", h.launch(configure = nextLaunch).text("title"))
+    }
+
+    /**
+     * A run that stored a release over files it could never read has nothing
+     * of the device to start from: what it stored waits for the next launch.
+     */
+    @Test
+    fun aReleaseStoredOverFilesThatCouldNotBeReadWaitsForTheNextLaunch() {
+        val h = Harness(folder.root)
+        val nextLaunch: LocalizeConfig.Builder.() -> Unit = { updatePolicy(UpdatePolicy.NEXT_LAUNCH) }
+        h.launchWith("en" to """{ "title": "one" }""")
+        assertTrue(File(projectFolder(), ReleaseStore.STATE_FILE).setReadable(false))
+        val client = h.launch(configure = nextLaunch)
+        h.transport.pointer("v2")
+        h.transport.file("v2", "en", """{ "title": "two" }""")
+        assertEquals(Status.DOWNLOADED, client.refreshNow().status)
+        assertEquals(setOf("state.json", "v2.json"), projectFolder().list()!!.toSet())
+
+        assertEquals(Status.DOWNLOADED, client.refreshNow().status)
+
+        assertNull(client.version)
+        assertEquals("title", client.text("title"))
+        offline(h)
+        assertEquals("two", h.launch(configure = nextLaunch).text("title"))
+    }
+
+    /**
+     * Files of the release the run already reads change nothing on screen,
+     * so they are used although the device cannot take them now. The next
+     * refresh stores them.
+     */
+    @Test
+    fun nextLaunchModeUsesFilesOfTheReleaseInUseThatCouldNotBeStored() {
+        val h = Harness(folder.root)
+        val french: LocalizeConfig.Builder.() -> Unit = {
+            updatePolicy(UpdatePolicy.NEXT_LAUNCH)
+            locale("fr")
+            fallbackLocale("en")
+        }
+        h.launchWith("en" to """{ "title": "one" }""")
+        val client = h.launch(configure = french)
+        assertNull(client.version)
+        assertTrue(projectFolder().setWritable(false))
+        try {
+            assertEquals(Status.APPLIED, client.refreshNow().status)
+            assertEquals("v1", client.version)
+            assertEquals("one", client.text("title"))
+        } finally {
+            assertTrue(projectFolder().setWritable(true))
+        }
+
+        assertEquals(Status.UP_TO_DATE, client.refreshNow().status)
+        offline(h)
+        val next = h.launch(configure = french)
+        assertEquals("v1", next.version)
+        assertEquals("one", next.text("title"))
+    }
+
     @Test
     fun nextLaunchModeReportsAReleaseItCouldNotStore() {
         val notAFolder = folder.newFile("blocked")

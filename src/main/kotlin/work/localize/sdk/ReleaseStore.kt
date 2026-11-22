@@ -15,8 +15,9 @@ import java.io.IOException
  *
  * A release file is written whole under a temporary name and then renamed, and
  * `state.json` is written after it, so a crash or a full disk leaves either
- * the old state or the new one. Anything that cannot be read is thrown away;
- * the cache is only ever a copy of what the CDN serves.
+ * the old state or the new one. Anything that is not a release of this project
+ * is thrown away; the cache is only ever a copy of what the CDN serves. Files
+ * that cannot be read at all are left alone: they may be fine.
  *
  * Reads and writes of every store exclude each other, so a client that is
  * being replaced and its replacement never work on the folder at once, and a
@@ -38,20 +39,55 @@ internal class ReleaseStore(root: File, projectSlug: String, private val cdnBase
     }
 
     /**
-     * The release to use at start, or `null` when there is none. A release
-     * waiting for the next launch becomes the one in use. With a [pinned]
-     * version only that version is taken, whichever of the two holds it; a
-     * device that holds other versions keeps them and gets `null`. Never throws.
+     * What [read] found.
+     *
+     * @param release the release to use at start, or `null` when there is none
+     * @param readable `false` when the device could not be read now, as
+     *   while its storage is locked. That says nothing about what it holds,
+     *   so the files stay, and are worth reading again later.
      */
-    fun load(pinned: String? = null): Release? = synchronized(DISK_LOCK) { loadLocked(pinned) }
+    class Stored(val release: Release?, val readable: Boolean)
 
-    private fun loadLocked(pinned: String?): Release? {
+    /**
+     * What the device holds for a start of the app. A release waiting for the
+     * next launch becomes the one in use. With a [pinned] version only that
+     * version is taken, whichever of the two holds it; a device that holds
+     * other versions keeps them and gives none. Never throws.
+     */
+    fun read(pinned: String? = null): Stored = synchronized(DISK_LOCK) { readLocked(pinned) }
+
+    /** The release of [read]. */
+    fun load(pinned: String? = null): Release? = read(pinned).release
+
+    /**
+     * Whether the device names [activeVersion] as the release in use and
+     * [pendingVersion] as the one waiting, and has their files. `true` also
+     * when it cannot be read now: nothing is known to be missing then.
+     */
+    fun names(activeVersion: String?, pendingVersion: String?): Boolean = synchronized(DISK_LOCK) {
         try {
+            val state = readState()
+            state != null && state.active == activeVersion && state.pending == pendingVersion &&
+                listOfNotNull(activeVersion, pendingVersion).all { releaseFile(it).isFile }
+        } catch (failure: Exception) {
+            true
+        }
+    }
+
+    private fun readLocked(pinned: String?): Stored {
+        try {
+            if (!directory.exists()) {
+                // Nothing is stored, where something could be. A folder that
+                // cannot even be made is storage that cannot be reached now.
+                if (!directory.mkdirs()) return UNREADABLE
+                directory.delete()
+                return NOTHING
+            }
             val state = readState()
             if (state == null) {
                 // No state, or one written for another CDN or by another format.
                 wipe()
-                return null
+                return NOTHING
             }
             var active = state.active?.let(::readRelease)
             val pending = state.pending?.let(::readRelease)
@@ -59,31 +95,36 @@ internal class ReleaseStore(root: File, projectSlug: String, private val cdnBase
                 active = sequenceOf(pending, active).firstOrNull { it?.version == pinned }
                 // What is there belongs to the configuration that follows the
                 // latest release; a refresh replaces it with the pinned one.
-                if (active == null) return null
+                if (active == null) return NOTHING
             } else if (pending != null) {
                 active = pending
             }
             if (active == null) {
                 wipe()
-                return null
+                return NOTHING
             }
             if (state.pending != null || state.active != active.version) {
                 try {
                     writeState(active.version, null)
                 } catch (failure: IOException) {
                     // Still usable from memory; the promotion is repeated at the next start.
-                    return active
+                    return Stored(active, true)
                 }
             }
             removeAllExcept(setOf(active.version))
-            return active
+            return Stored(active, true)
+        } catch (failure: IOException) {
+            // The files are there and cannot be read. They may be fine.
+            return UNREADABLE
+        } catch (failure: SecurityException) {
+            return UNREADABLE
         } catch (failure: Exception) {
             try {
                 wipe()
             } catch (ignored: Exception) {
                 // Nothing more to do; the SDK works without a cache.
             }
-            return null
+            return NOTHING
         }
     }
 
@@ -147,8 +188,19 @@ internal class ReleaseStore(root: File, projectSlug: String, private val cdnBase
         return Release.fromJson(file.readText(Charsets.UTF_8), version)
     }
 
+    /**
+     * Files of a version never change, so those the device already has of it
+     * are kept: another configuration of the app, pinned to this version
+     * say, may have stored them for another locale. Only while the state
+     * says the folder is this project's, from this CDN.
+     */
     private fun writeRelease(release: Release) {
-        writeAtomically(releaseFile(release.version), release.toJson())
+        val there = try {
+            if (readState() != null) readRelease(release.version) else null
+        } catch (failure: Exception) {
+            null
+        }
+        writeAtomically(releaseFile(release.version), (there?.plus(release) ?: release).toJson())
     }
 
     private fun releaseFile(version: String) = File(directory, "$version.json")
@@ -190,6 +242,9 @@ internal class ReleaseStore(root: File, projectSlug: String, private val cdnBase
     internal companion object {
         /** One lock for every store: two stores of one folder must not interleave. */
         private val DISK_LOCK = Any()
+
+        private val NOTHING = Stored(null, true)
+        private val UNREADABLE = Stored(null, false)
 
         const val STATE_FILE = "state.json"
         private const val MAX_STATE_BYTES = 64L * 1024

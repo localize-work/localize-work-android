@@ -31,6 +31,9 @@ internal class Release(
         return Release(version, merged)
     }
 
+    /** This release with the files of [other], of the same version, added. */
+    fun plus(other: Release): Release = plus(other.files)
+
     fun toJson(): String = Json.write(
         linkedMapOf("format" to FORMAT, "version" to version, "files" to files),
     )

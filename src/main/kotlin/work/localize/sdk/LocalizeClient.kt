@@ -71,13 +71,15 @@ internal class LocalizeClient(
         // The release a run shows is decided when the app starts, and that
         // is the first time the run asks for this project: what the device
         // holds then, where a release that waited becomes the one in use.
-        val (project, first) = appRun.project(key) { store.load(config.version) }
+        val (project, first) = appRun.project(key) { store.read(config.version) }
         this.project = project
         snapshot = synchronized(project) {
             // A later client of the same run goes on from what the run holds
             // by now. With the next-launch policy that is all: the release
             // that waits on the device keeps waiting, and a run that started
-            // with nothing still has nothing.
+            // with nothing still has nothing. A run that could not look yet
+            // looks now.
+            if (!first) lookAgain()
             if (!first && config.updatePolicy == UpdatePolicy.IMMEDIATE) {
                 // The newest release is read as soon as it is here, and the
                 // stored one is that. When a release could not be stored it
@@ -210,6 +212,7 @@ internal class LocalizeClient(
      * for the locale it is in now.
      */
     private fun refreshLocked(): RefreshResult {
+        startFromDevice()
         val facts = Facts()
         var applied = false
         repeat(MAX_LOCALE_CHANGES) {
@@ -230,6 +233,39 @@ internal class LocalizeClient(
             LocalizeException(Reason.NETWORK, "the locale kept changing while the refresh ran"),
         )
     }
+
+    /**
+     * Reads the device once more when it could not be read before
+     * ([AppRun.Project.unread]): what is there now is what the run starts
+     * with. Not in place of a release the run has put in use from memory
+     * meanwhile. Returns whether the run got its release this way. Called
+     * under [project].
+     */
+    private fun lookAgain(): Boolean {
+        if (!project.unread) return false
+        val stored = store.read(config.version)
+        if (!stored.readable) return false
+        project.unread = false
+        if (project.held != null || stored.release == null) return false
+        project.held = stored.release
+        return true
+    }
+
+    /** [lookAgain] for a client in use: the release found is read at once when it is whole for the locale. */
+    private fun startFromDevice() {
+        val usable = synchronized(project) {
+            if (closed || !lookAgain()) return
+            project.held?.let(::hold)?.usable
+        }
+        if (usable != null) notifyListeners(usable.version)
+    }
+
+    /**
+     * [ReleaseStore.save], under [project]. Once the run has written to the
+     * device, what was there before is gone: nothing is left to look for.
+     */
+    private fun write(activeVersion: String?, pendingVersion: String?, changed: Release?): Boolean =
+        store.save(activeVersion, pendingVersion, changed).also { stored -> if (stored) project.unread = false }
 
     /** Whether what a pass that started with [view] concluded may still be acted on. */
     private fun stillHolds(view: Snapshot): Boolean = !closed && snapshot.locale == view.locale
@@ -388,7 +424,7 @@ internal class LocalizeClient(
         val usable = synchronized(project) {
             if (!stillHolds(view)) return false
             val extended = active.plus(more.files)
-            project.unstored = !store.save(extended.version, project.pending?.version, extended)
+            project.unstored = !write(extended.version, project.pending?.version, extended)
             hold(extended).usable != null
         }
         if (usable) notifyListeners(active.version)
@@ -438,15 +474,19 @@ internal class LocalizeClient(
             if (active != null && active.version == version) {
                 val extended = active.plus(fetched)
                 if (extended === active && current.usable != null) {
-                    // The release the app holds is the current one. Two
+                    // The release the app holds is the current one. Three
                     // things may still be owed to the device. A release that
                     // was waiting for the next launch has been rolled back,
                     // and is forgotten once the device no longer names it.
-                    // And files the device could not take earlier are
-                    // written now. Either is tried again by the next refresh
-                    // for as long as it fails.
-                    if (project.pending != null || project.unstored) {
-                        if (store.save(active.version, null, active.takeIf { project.unstored })) {
+                    // Files the device could not take earlier are written
+                    // now. And what the run holds says little of the device,
+                    // which another configuration of the app may have
+                    // written since, one pinned to another version say: when
+                    // the device no longer names this release, it is stored
+                    // again. Each is tried again by the next refresh for as
+                    // long as it fails.
+                    if (project.pending != null || project.unstored || !store.names(active.version, null)) {
+                        if (write(active.version, null, active)) {
                             project.pending = null
                             project.unstored = false
                         }
@@ -455,7 +495,7 @@ internal class LocalizeClient(
                 }
                 // More files of the same immutable release (a new locale or
                 // namespace): nothing the app already shows can change.
-                val stored = store.save(extended.version, null, extended)
+                val stored = write(extended.version, null, extended)
                 if (stored) project.pending = null
                 project.unstored = !stored
                 hold(extended)
@@ -469,17 +509,20 @@ internal class LocalizeClient(
                 // Kept in memory even when the device refuses it; the next
                 // refresh tries to store it again, and until then the next
                 // launch starts from the older copy.
-                project.unstored = !store.save(release.version, null, release)
+                project.unstored = !write(release.version, null, release)
                 project.pending = null
                 hold(release)
                 notifyVersion = version
                 return@synchronized RefreshResult(RefreshResult.Status.APPLIED, version, null)
             }
 
-            if (release === waiting) {
+            // A release the run has stored for the next launch waits there
+            // only while the device says so. Another configuration of the
+            // app may have removed it since; then it is stored again.
+            if (release === waiting && store.names(active?.version, version)) {
                 return@synchronized RefreshResult(RefreshResult.Status.DOWNLOADED, version, null)
             }
-            if (!store.save(active?.version, release.version, release)) {
+            if (!write(active?.version, release.version, release)) {
                 return@synchronized failed(
                     version,
                     LocalizeException(Reason.STORAGE, "release $version could not be stored for the next launch"),
@@ -498,9 +541,25 @@ internal class LocalizeClient(
     private fun failed(version: String?, error: LocalizeException) =
         RefreshResult(RefreshResult.Status.FAILED, version, error)
 
+    /**
+     * Runs [task] on [callbacks], where it may wait its turn, and tells it
+     * whether this client is still the one in use when it gets there. By
+     * then the SDK may have been set up again, and whatever the task has to
+     * say is about a client the app no longer reads.
+     */
+    private fun onCallbacks(task: (live: Boolean) -> Unit) {
+        try {
+            callbacks.execute { task(!closed) }
+        } catch (rejected: RejectedExecutionException) {
+            // The app is shutting down; there is nobody left to tell.
+        }
+    }
+
+    /** Tells the listeners of a change. A client that was replaced meanwhile tells them nothing. */
     private fun notifyListeners(version: String?) {
         if (listeners.isEmpty()) return
-        run(callbacks) {
+        onCallbacks { live ->
+            if (!live) return@onCallbacks
             for (listener in listeners) {
                 try {
                     listener.onStringsChanged(version)
@@ -511,26 +570,14 @@ internal class LocalizeClient(
         }
     }
 
-    /**
-     * Hands [result] to [callback] on [callbacks]. It may wait its turn
-     * there, and the client may be replaced meanwhile; so that is looked at
-     * when the callback runs: a client that was replaced reports only that.
-     */
+    /** Hands [result] to [callback]. A client that was replaced meanwhile reports only that. */
     private fun deliver(callback: RefreshCallback?, result: RefreshResult) {
         if (callback == null) return
-        run(callbacks) { callback.onResult(if (closed) replaced(result.version) else result) }
+        onCallbacks { live -> callback.onResult(if (live) result else replaced(result.version)) }
     }
 
     private companion object {
         /** How many times one refresh follows a locale switched while it downloads. */
         const val MAX_LOCALE_CHANGES = 4
-    }
-
-    private fun run(executor: Executor, task: () -> Unit) {
-        try {
-            executor.execute(task)
-        } catch (rejected: RejectedExecutionException) {
-            // The app is shutting down; there is nobody left to tell.
-        }
     }
 }

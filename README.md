@@ -353,9 +353,18 @@ the refresh fails.
 **Stored on the device.** The last complete release is kept in the app's
 private storage (`no_backup/localize-work/`), and `init` loads it before it
 returns. The app therefore starts with its texts and works offline. Older
-releases are deleted. A stored release that cannot be read is thrown away and
-downloaded again; it never crashes the app. Releases are stored per project,
-and a change of `cdnBaseUrl` discards them.
+releases are deleted. A stored release that is damaged is thrown away and
+downloaded again; it never crashes the app. Files that are there but cannot be
+read at all, as while the device's storage is locked, are left alone and read
+again later. Releases are stored per project, and a change of `cdnBaseUrl`
+discards them.
+
+A configuration pinned to a `version` shares the project's folder with one that
+follows `latest.json`, and each leaves only its own releases there. A refresh
+asks the device what it holds, and stores its release again when the device no
+longer has it, also when nothing newer is published. Files of a release are
+never dropped while that release stays: more files written for it are added to
+those already there.
 
 **Immediately or at the next launch.** With `UpdatePolicy.IMMEDIATE` a new
 release is used as soon as it is complete, and listeners are told. With
@@ -371,7 +380,10 @@ release the app shows:
    `setLocale` or after `Localize.init` is called again, and a run that started
    with nothing stored shows bundled strings to its end. That is kept for each
    project by itself: an app that is set up for another project and then for
-   the first one again shows what it showed of the first one before.
+   the first one again shows what it showed of the first one before. Stored
+   files that cannot be read when the app starts are not "nothing stored": the
+   SDK reads them again at the next `Localize.init` or refresh, and what it
+   finds then is the release of the run.
 2. A release is read only once it has every file the language needs. A stored
    release that lacks files for the language, because the language changed
    before this start or during the run, is still the release of this run: the
@@ -415,11 +427,15 @@ Calling `Localize.init` again replaces the configuration. The earlier one
 stops: it puts nothing more in use and stores nothing, so it cannot write over
 what the new one stores, and a refresh it still has under way reports only
 that it was replaced, also when its result was already on its way to the main
-thread. The new one goes on from what this run of the app holds of its
-project, also when that release could not be stored.
+thread; a change it was about to tell listeners of is not passed on. The new
+one goes on from what this run of the app holds of its project.
 
 A release the device could not take is used from memory, and the next refresh
-stores it.
+stores it. With `IMMEDIATE` that is any release. With `NEXT_LAUNCH` it is more
+files of the release the run already reads; a newer release that cannot be
+stored cannot wait for the next start, and the refresh fails with `STORAGE`. A
+release held in memory only is kept when `Localize.init` is called again, with
+`IMMEDIATE` only while nothing is stored: a stored release is read first.
 
 **Failures.** A request that gets no answer, or a server error (5xx), is tried
 up to three times. Anything else is final for that refresh:

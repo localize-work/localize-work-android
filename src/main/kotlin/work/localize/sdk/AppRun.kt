@@ -44,6 +44,15 @@ internal class AppRun {
          * from memory all the same, and the next refresh stores it.
          */
         var unstored = false
+
+        /**
+         * Whether the device could not be read when the run first asked for
+         * the project, as while its storage is locked. That is not a run
+         * that started with nothing: it could not look. The device is read
+         * again when the SDK is set up again and at the next refresh, and
+         * what is found then is the release the run starts with.
+         */
+        var unread = false
     }
 
     /**
@@ -51,10 +60,14 @@ internal class AppRun {
      * first time in the run it is asked for. It is new then, and holds what
      * [onDevice] read: the release the run starts with.
      */
-    fun project(key: Key, onDevice: () -> Release?): Pair<Project, Boolean> = synchronized(projects) {
+    fun project(key: Key, onDevice: () -> ReleaseStore.Stored): Pair<Project, Boolean> = synchronized(projects) {
         val known = projects[key]
         if (known != null) return known to false
-        val started = Project().apply { held = onDevice() }
+        val started = Project().apply {
+            val stored = onDevice()
+            held = stored.release
+            unread = !stored.readable
+        }
         projects[key] = started
         started to true
     }

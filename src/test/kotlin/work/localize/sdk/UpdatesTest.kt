@@ -1132,6 +1132,38 @@ class UpdatesTest {
         assertEquals(LocalizeException.Reason.NOT_INITIALIZED, results.single().error?.reason)
     }
 
+    /**
+     * The same for listeners: a change that waits its turn on the main
+     * thread is of a client that was replaced by the time it gets there, and
+     * says nothing of the texts the app shows now.
+     */
+    @Test
+    fun aChangeHeardAfterTheClientWasReplacedIsNotPassedOn() {
+        val h = Harness(folder.root)
+        h.transport.pointer("v1")
+        h.transport.file("v1", "en", """{ "title": "one" }""")
+        val waiting = ArrayList<Runnable>()
+        val listeners = CopyOnWriteArrayList<LocalizeListener>()
+        listeners.add(LocalizeListener { version -> heard.add(version) })
+        val client = LocalizeClient(
+            config = LocalizeConfig(SLUG) { cdnBaseUrl(CDN) },
+            cacheRoot = folder.root,
+            deviceLocale = "en",
+            transport = h.transport,
+            bundled = { _, _ -> null },
+            worker = { it.run() },
+            callbacks = { waiting.add(it) },
+            listeners = listeners,
+            sleeper = { },
+        )
+        assertEquals(Status.APPLIED, client.refreshNow().status)
+
+        client.close()
+        waiting.forEach { it.run() }
+
+        assertTrue(heard.isEmpty())
+    }
+
     @Test
     fun aReplacedClientChangesNothingFurther() {
         val h = Harness(folder.root)
