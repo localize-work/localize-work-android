@@ -1,0 +1,125 @@
+package work.localize.sdk
+
+/** The app's own string resources, used when no downloaded file has a text. */
+internal fun interface BundledStrings {
+    /**
+     * The raw text of the resource called [resourceName], or `null` when the
+     * app has none. With a [count], a `plurals` resource of that name is
+     * preferred over a `string` resource.
+     */
+    fun find(resourceName: String, count: Long?): String?
+}
+
+internal object ResourceNames {
+    /** The namespace whose keys the Android export writes without a prefix. */
+    private const val UNPREFIXED_NAMESPACE = "strings"
+
+    /**
+     * The resource name localize.work's Android export gives a key: the
+     * namespace and the key joined by `_` (the key alone in a namespace called
+     * `strings`), every character other than a letter, digit or underscore
+     * replaced by `_`, and a leading `_` added when the name would start with
+     * a digit. `translation` + `nav.home` is `translation_nav_home`.
+     */
+    fun forKey(namespace: String, key: String): String {
+        val full = if (namespace == UNPREFIXED_NAMESPACE) key else "${namespace}_$key"
+        val name = StringBuilder(full.length + 1)
+        for (char in full) {
+            val keep = char in 'a'..'z' || char in 'A'..'Z' || char in '0'..'9' || char == '_'
+            name.append(if (keep) char else '_')
+        }
+        if (name.isNotEmpty() && name[0] in '0'..'9') name.insert(0, '_')
+        return name.toString()
+    }
+}
+
+/**
+ * Fills the arguments into a bundled resource text.
+ *
+ * localize.work's Android export writes a key's `{{name}}` placeholders as
+ * numbered conversions (`%1$s`, `%2$s`), numbered in the order the variables
+ * first appear in the source text, with the count of a plural key as `%N$d`.
+ * The resource no longer names its variables, so the arguments are matched by
+ * position: the first entry of the argument map is argument 1, and so on. The
+ * count of a plural lookup, when it is not in the map itself, takes the
+ * position of the text's `%N$d` conversion.
+ */
+internal object BundledText {
+    private class Conversion(val start: Int, val end: Int, val position: Int, val type: Char)
+
+    fun format(raw: String, args: Map<String, Any?>, count: Long?): String {
+        val conversions = ArrayList<Conversion>()
+        var hasDoubledPercent = false
+        var sequential = 0
+        var index = 0
+        while (index < raw.length) {
+            if (raw[index] != '%') {
+                index++
+                continue
+            }
+            if (index + 1 < raw.length && raw[index + 1] == '%') {
+                hasDoubledPercent = true
+                index += 2
+                continue
+            }
+            var cursor = index + 1
+            var explicit = 0
+            val digitsStart = cursor
+            while (cursor < raw.length && raw[cursor] in '0'..'9' && cursor - digitsStart < 4) {
+                explicit = explicit * 10 + (raw[cursor] - '0')
+                cursor++
+            }
+            val numbered = cursor > digitsStart && cursor < raw.length && raw[cursor] == '$'
+            if (numbered) cursor++ else cursor = index + 1
+            if (cursor < raw.length && (raw[cursor] == 's' || raw[cursor] == 'd')) {
+                val position = if (numbered) explicit else ++sequential
+                conversions.add(Conversion(index, cursor + 1, position, raw[cursor]))
+                index = cursor + 1
+            } else {
+                index++
+            }
+        }
+
+        // The export doubles a literal "%" only in a text the app formats,
+        // which is one that takes arguments.
+        val formatted = conversions.isNotEmpty() || args.isNotEmpty() || count != null
+        if (!formatted || (conversions.isEmpty() && !hasDoubledPercent)) {
+            return Interpolator.interpolate(raw, args, count)
+        }
+
+        val values = args.values.toList()
+        val countPosition = if (count != null && !args.containsKey("count")) {
+            conversions.firstOrNull { it.type == 'd' }?.position
+        } else {
+            null
+        }
+
+        val out = StringBuilder(raw.length + 16)
+        var copiedTo = 0
+        fun appendLiteral(until: Int) {
+            if (until > copiedTo) {
+                val literal = raw.substring(copiedTo, until).replace("%%", "%")
+                out.append(Interpolator.interpolate(literal, args, count))
+            }
+        }
+        for (conversion in conversions) {
+            appendLiteral(conversion.start)
+            val position = conversion.position
+            val valueIndex = when {
+                countPosition == null -> position - 1
+                position == countPosition -> -1
+                position > countPosition -> position - 2
+                else -> position - 1
+            }
+            when {
+                countPosition != null && position == countPosition -> out.append(count)
+                valueIndex in values.indices -> out.append(values[valueIndex]?.toString() ?: "")
+                conversion.type == 'd' && count != null -> out.append(count)
+                else -> out.append(raw, conversion.start, conversion.end)
+            }
+            copiedTo = conversion.end
+        }
+        appendLiteral(raw.length)
+        return out.toString()
+    }
+}
