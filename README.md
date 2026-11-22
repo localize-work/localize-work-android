@@ -369,7 +369,9 @@ release the app shows:
 1. The release a run shows is decided when the app starts: it is the stored
    release. With `NEXT_LAUNCH` it changes only at the next start, also after
    `setLocale` or after `Localize.init` is called again, and a run that started
-   with nothing stored shows bundled strings to its end.
+   with nothing stored shows bundled strings to its end. That is kept for each
+   project by itself: an app that is set up for another project and then for
+   the first one again shows what it showed of the first one before.
 2. A release is read only once it has every file the language needs. A stored
    release that lacks files for the language, because the language changed
    before this start or during the run, is still the release of this run: the
@@ -404,14 +406,20 @@ has texts in elsewhere. Texts in a namespace the app no longer lists do not
 count.
 
 The locale can be switched while a refresh is running. The refresh then starts
-over for the locale the app is in now, with what it has already fetched: what
-it found out for the earlier locale, such as that the release has that
-language, is not carried over to the new one.
+over for the locale the app is in now. No file is asked for twice in one
+refresh, but what the refresh found out for the earlier locale is not carried
+over to the new one: neither that the release has that language, nor the files
+it fetched or found missing for it, which stay out of the release.
 
 Calling `Localize.init` again replaces the configuration. The earlier one
-stops: a refresh it still has under way stores nothing, so it cannot write
-over what the new one stores, and reports only that it was replaced. The new one goes on from the release the earlier
-one held, also when that release could not be stored.
+stops: it puts nothing more in use and stores nothing, so it cannot write over
+what the new one stores, and a refresh it still has under way reports only
+that it was replaced, also when its result was already on its way to the main
+thread. The new one goes on from what this run of the app holds of its
+project, also when that release could not be stored.
+
+A release the device could not take is used from memory, and the next refresh
+stores it.
 
 **Failures.** A request that gets no answer, or a server error (5xx), is tried
 up to three times. Anything else is final for that refresh:

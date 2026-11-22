@@ -23,14 +23,11 @@ import java.io.IOException
  * store that was [close]d writes nothing more.
  */
 internal class ReleaseStore(root: File, projectSlug: String, private val cdnBaseUrl: String) {
-    private val directory = File(root, directoryName(projectSlug))
+    /** The folder of this project. */
+    val directory = File(root, directoryName(projectSlug))
 
     /** Guarded by [DISK_LOCK]. */
     private var closed = false
-
-    /** Whether [other] keeps the same project's releases in the same place. */
-    fun isSameAs(other: ReleaseStore): Boolean =
-        directory == other.directory && cdnBaseUrl == other.cdnBaseUrl
 
     /**
      * Stops this store from writing. Returns once a write that was under way

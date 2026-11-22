@@ -114,6 +114,29 @@ class CacheTest {
         assertNull(h.launch().version)
     }
 
+    /**
+     * The device could not take the release, so it is in use from memory.
+     * The next refresh finds nothing newer, and stores what the app holds:
+     * the next launch has it without a connection.
+     */
+    @Test
+    fun aReleaseThatCouldNotBeStoredIsStoredByTheNextRefresh() {
+        val blocked = folder.newFile("blocked")
+        val h = Harness(blocked)
+        h.transport.pointer("v1")
+        h.transport.file("v1", "en", """{ "title": "one" }""")
+        val client = h.launch()
+        assertEquals(Status.APPLIED, client.refreshNow().status)
+        assertNull(h.launch().version)
+
+        assertTrue(blocked.delete())
+        assertEquals(Status.UP_TO_DATE, client.refreshNow().status)
+
+        h.transport.unreachable(POINTER_URL)
+        assertEquals("one", h.launch().text("title"))
+        assertEquals(1, h.transport.requests.count { it == fileUrl("v1", "en") })
+    }
+
     @Test
     fun oldVersionsAreRemovedOnceANewOneIsInUse() {
         val h = Harness(folder.root)

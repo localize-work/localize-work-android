@@ -931,6 +931,207 @@ class UpdatesTest {
         assertNull(client.version)
     }
 
+    /**
+     * The app leaves a locale the release has no file for while the refresh
+     * is still under way, for one the release does have. What was asked for
+     * the locale it left stays what the CDN answered, and is no part of the
+     * release: back in that locale the app shows its bundled strings, not the
+     * release's fallback locale, and so does the next launch.
+     */
+    @Test
+    fun aLocaleLeftDuringARefreshIsNotAddedToTheReleaseAsEmptyFiles() {
+        for (policy in UpdatePolicy.values()) {
+            val root = folder.newFolder()
+            val h = Harness(root)
+            h.transport.file("v1", "de", """{ "title": "Hallo" }""")
+            h.launchWith("en" to """{ "title": "Hello" }""")
+            h.transport.status(POINTER_URL, 503)
+            val queued = ArrayList<Runnable>()
+            val client = LocalizeClient(
+                config = LocalizeConfig(SLUG) {
+                    cdnBaseUrl(CDN)
+                    fallbackLocale("en")
+                    updatePolicy(policy)
+                },
+                cacheRoot = root,
+                deviceLocale = "fr",
+                transport = h.transport,
+                bundled = { _, _ -> null },
+                worker = { queued.add(it) },
+                callbacks = { it.run() },
+                sleeper = { },
+            )
+            h.transport.onRequest = { url ->
+                if (url == POINTER_URL) {
+                    h.transport.onRequest = {}
+                    client.setLocale("de", null)
+                }
+            }
+
+            client.refreshNow()
+            assertEquals(policy.name, "Hallo", client.text("title"))
+
+            client.setLocale("fr", null)
+            assertNull(policy.name, client.version)
+            assertEquals(policy.name, "Bonjour (bundled)", client.text("title", fallback = "Bonjour (bundled)"))
+            queued.forEach { it.run() }
+            assertNull(policy.name, client.version)
+
+            val relaunched = h.launch(deviceLocale = "fr") {
+                fallbackLocale("en")
+                updatePolicy(policy)
+            }
+            assertNull(policy.name, relaunched.version)
+            assertEquals(policy.name, "Bonjour (bundled)", relaunched.text("title", fallback = "Bonjour (bundled)"))
+        }
+    }
+
+    /**
+     * A file is asked for once in a refresh. One that could not be had is
+     * not tried again when the same refresh comes to it a second time, and
+     * one that was fetched is not fetched again.
+     */
+    @Test
+    fun aFileIsAskedForOnceInARefreshAlsoWhenItFailed() {
+        val h = Harness(folder.root)
+        h.launchWith("en" to """{ "title": "Hello" }""")
+        h.transport.file("v1", "de-AT", """{ "title": "Servus" }""")
+        h.transport.status(fileUrl("v1", "de"), 503)
+        val client = h.launch(deviceLocale = "de-AT")
+        h.transport.requests.clear()
+        h.sleeps.clear()
+
+        val result = client.refreshNow()
+
+        assertEquals(Status.FAILED, result.status)
+        assertEquals(LocalizeException.Reason.SERVER_ERROR, result.error?.reason)
+        assertEquals(1, h.transport.requests.count { it == fileUrl("v1", "de-AT") })
+        assertEquals(3, h.transport.requests.count { it == fileUrl("v1", "de") })
+        assertEquals(listOf(400L, 1200L), h.sleeps.toList())
+        assertNull(client.version)
+    }
+
+    /**
+     * A run that started with nothing stored for a project shows bundled
+     * strings to its end, also when the app was set up for another project
+     * in between and then for this one again.
+     */
+    @Test
+    fun inNextLaunchModeAReleaseDownloadedInThisRunIsNotShownAfterAnotherProjectWasSetUp() {
+        val h = Harness(folder.root)
+        h.transport.pointer("v1")
+        h.transport.file("v1", "en", """{ "title": "Hello" }""")
+        val nextLaunch: LocalizeConfig.Builder.() -> Unit = { updatePolicy(UpdatePolicy.NEXT_LAUNCH) }
+        val first = h.launch(configure = nextLaunch)
+        assertEquals(Status.DOWNLOADED, first.refreshNow().status)
+
+        val other = h.launch(continuing = first, slug = "other", configure = nextLaunch)
+        val back = h.launch(continuing = other, configure = nextLaunch)
+
+        assertNull(back.version)
+        assertEquals("title", back.text("title"))
+        assertEquals(Status.DOWNLOADED, back.refreshNow().status)
+        assertNull(back.version)
+        // The next launch reads it, offline.
+        h.transport.unreachable(POINTER_URL)
+        assertEquals("Hello", h.launch(configure = nextLaunch).text("title"))
+    }
+
+    /** The same for a run that started with a release: it is the one shown after the way there and back. */
+    @Test
+    fun inNextLaunchModeTheReleaseTheRunStartedWithIsShownAfterAnotherProjectWasSetUp() {
+        val h = Harness(folder.root)
+        h.launchWith("en" to """{ "title": "Hello v1" }""")
+        val nextLaunch: LocalizeConfig.Builder.() -> Unit = { updatePolicy(UpdatePolicy.NEXT_LAUNCH) }
+        val first = h.launch(configure = nextLaunch)
+        h.transport.pointer("v2")
+        h.transport.file("v2", "en", """{ "title": "Hello v2" }""")
+        assertEquals(Status.DOWNLOADED, first.refreshNow().status)
+
+        val other = h.launch(continuing = first, slug = "other", configure = nextLaunch)
+        val back = h.launch(continuing = other, configure = nextLaunch)
+
+        assertEquals("Hello v1", back.text("title"))
+        assertEquals(Status.DOWNLOADED, back.refreshNow().status)
+        assertEquals("Hello v1", back.text("title"))
+        h.transport.unreachable(POINTER_URL)
+        assertEquals("Hello v2", h.launch(configure = nextLaunch).text("title"))
+    }
+
+    /**
+     * The SDK is set up again at the very moment the earlier client puts a
+     * release in use. Either that happens wholly before the client is
+     * replaced, and the release is on the device, or not at all: the new
+     * client never goes on from a release the device does not name.
+     */
+    @Test
+    fun aClientIsReplacedBeforeOrAfterItPutsAReleaseInUseNeverInBetween() {
+        val h = Harness(folder.root)
+        h.launchWith("en" to """{ "title": "Hello v1" }""")
+        val old = h.launch()
+        h.transport.pointer("v2")
+        h.transport.file("v2", "en", """{ "title": "Hello v2" }""")
+        val nextLaunch: LocalizeConfig.Builder.() -> Unit = { updatePolicy(UpdatePolicy.NEXT_LAUNCH) }
+        // The lock every write to the device takes. While the test holds it,
+        // the refresh stands still where it stores the release it has just
+        // decided to put in use.
+        val diskLock = ReleaseStore::class.java.getDeclaredField("DISK_LOCK").apply { isAccessible = true }.get(null)!!
+        var replacement: LocalizeClient? = null
+        val refreshing = Thread { old.refreshNow() }
+        val replacing = Thread { replacement = h.launch(continuing = old, configure = nextLaunch) }
+        synchronized(diskLock) {
+            refreshing.start()
+            awaitBlocked(refreshing)
+            replacing.start()
+            awaitBlocked(replacing)
+        }
+        refreshing.join(10_000)
+        replacing.join(10_000)
+
+        h.transport.unreachable(POINTER_URL)
+        val onDevice = h.launch(configure = nextLaunch).version
+        assertEquals(onDevice, replacement!!.version)
+    }
+
+    private fun awaitBlocked(thread: Thread) {
+        val deadline = System.nanoTime() + 10_000_000_000
+        while (thread.state != Thread.State.BLOCKED) {
+            check(System.nanoTime() < deadline) { "the thread never came to wait: ${thread.state}" }
+            Thread.sleep(1)
+        }
+    }
+
+    /**
+     * A result waits its turn on the main thread. When the SDK was set up
+     * again before it got there, it tells of a client that is no longer the
+     * one in use, and says only that.
+     */
+    @Test
+    fun aResultDeliveredAfterTheClientWasReplacedSaysItWasReplaced() {
+        val h = Harness(folder.root)
+        h.transport.pointer("v1")
+        h.transport.file("v1", "en", """{ "title": "one" }""")
+        val waiting = ArrayList<Runnable>()
+        val client = LocalizeClient(
+            config = LocalizeConfig(SLUG) { cdnBaseUrl(CDN) },
+            cacheRoot = folder.root,
+            deviceLocale = "en",
+            transport = h.transport,
+            bundled = { _, _ -> null },
+            worker = { it.run() },
+            callbacks = { waiting.add(it) },
+            sleeper = { },
+        )
+        val results = ArrayList<RefreshResult>()
+
+        client.refresh(results::add)
+        client.close()
+        waiting.forEach { it.run() }
+
+        assertEquals(Status.FAILED, results.single().status)
+        assertEquals(LocalizeException.Reason.NOT_INITIALIZED, results.single().error?.reason)
+    }
+
     @Test
     fun aReplacedClientChangesNothingFurther() {
         val h = Harness(folder.root)

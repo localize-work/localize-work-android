@@ -52,6 +52,9 @@ public object Localize {
     @Volatile
     private var client: LocalizeClient? = null
 
+    /** This run of the app: what it holds of every project [init] was called for. */
+    private val appRun = AppRun()
+
     /**
      * Sets the SDK up. Reads the stored release on the calling thread (a
      * small file read), then, unless [LocalizeConfig.refreshOnInit] is off,
@@ -60,7 +63,9 @@ public object Localize {
      * Calling it again replaces the earlier configuration, whose downloads
      * then store nothing more. It is still the same run of the app: with
      * [UpdatePolicy.NEXT_LAUNCH] the release on screen stays, and one that
-     * waits for the next launch keeps waiting.
+     * waits for the next launch keeps waiting. That holds for every project
+     * the app is set up for in one run, also when it goes to another project
+     * and back.
      */
     @JvmStatic
     public fun init(context: Context, config: LocalizeConfig) {
@@ -68,11 +73,10 @@ public object Localize {
         val mainThread = Handler(Looper.getMainLooper())
         synchronized(this) {
             // The client being replaced may still be downloading. It is
-            // stopped first, which waits for a write to the device that is
-            // under way, so the new client reads a settled state and the old
+            // stopped first, which waits for a release it is putting in use
+            // just now, so the new client finds a settled state and the old
             // one writes nothing over what the new one stores.
-            val previous = client
-            previous?.close()
+            client?.close()
             client = LocalizeClient(
                 config = config,
                 cacheRoot = config.cacheDirectory ?: File(application.noBackupFilesDir, "localize-work"),
@@ -83,7 +87,7 @@ public object Localize {
                 worker = worker,
                 callbacks = { task -> mainThread.post(task) },
                 listeners = listeners,
-                continuing = previous,
+                appRun = appRun,
             )
         }
         if (config.refreshOnInit) refresh()
