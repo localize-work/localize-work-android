@@ -260,6 +260,98 @@ class CacheTest {
     }
 
     @Test
+    fun aRollbackThatCouldNotBeWrittenIsWrittenByTheNextRefresh() {
+        val h = Harness(folder.root)
+        val nextLaunch: LocalizeConfig.Builder.() -> Unit = { updatePolicy(UpdatePolicy.NEXT_LAUNCH) }
+        h.launchWith("en" to """{ "title": "one" }""")
+        val run = h.launch(configure = nextLaunch)
+        h.transport.pointer("v2")
+        h.transport.file("v2", "en", """{ "title": "two" }""")
+        assertEquals(Status.DOWNLOADED, run.refreshNow().status)
+
+        // The release is rolled back while the device cannot be written to.
+        h.transport.pointer("v1")
+        val blocker = File(projectFolder(), "state.json.tmp")
+        assertTrue(blocker.mkdir())
+        assertEquals(Status.UP_TO_DATE, run.refreshNow().status)
+        assertEquals(setOf("state.json", "v1.json", "v2.json"), projectFolder().list()!!.toSet() - "state.json.tmp")
+        // The device can be written again; the next refresh makes up for it.
+        blocker.delete()
+        assertEquals(Status.UP_TO_DATE, run.refreshNow().status)
+
+        assertEquals(setOf("state.json", "v1.json"), projectFolder().list()!!.toSet())
+
+        offline(h)
+        val next = h.launch(configure = nextLaunch)
+        assertEquals("v1", next.version)
+        assertEquals("one", next.text("title"))
+    }
+
+    @Test
+    fun aStoredReleaseWithoutTheCurrentLocaleIsNotReadUntilItIsWhole() {
+        val h = Harness(folder.root)
+        h.transport.file("v1", "de", """{ "title": "Hallo" }""")
+        h.launchWith("en" to """{ "title": "Hello" }""")
+        h.bundledResources["translation_title"] = "Hallo (gebündelt)"
+
+        // The device language is German now, and there is no connection.
+        offline(h)
+        val german = h.launch(deviceLocale = "de") { fallbackLocale("en") }
+        assertNull(german.version)
+        assertEquals("Hallo (gebündelt)", german.text("title"))
+        assertEquals(Status.FAILED, german.refreshNow().status)
+        assertEquals("Hallo (gebündelt)", german.text("title"))
+
+        // Back online, the missing file completes the release that is there.
+        h.transport.pointer("v1")
+        h.transport.file("v1", "de", """{ "title": "Hallo" }""")
+        h.transport.file("v1", "en", """{ "title": "Hello" }""")
+        h.transport.requests.clear()
+        assertEquals(Status.APPLIED, german.refreshNow().status)
+        assertEquals(listOf(POINTER_URL, fileUrl("v1", "de")), h.transport.requests)
+        assertEquals("Hallo", german.text("title"))
+        // An English launch still reads it.
+        assertEquals("Hello", h.launch().text("title"))
+    }
+
+    @Test
+    fun aStoredReleaseOfAnotherVersionIsNotUsedUnderAPin() {
+        val h = Harness(folder.root)
+        val nextLaunch: LocalizeConfig.Builder.() -> Unit = { updatePolicy(UpdatePolicy.NEXT_LAUNCH) }
+        h.launchWith("en" to """{ "title": "one" }""")
+        val run = h.launch(configure = nextLaunch)
+        h.transport.pointer("v2")
+        h.transport.file("v2", "en", """{ "title": "two" }""")
+        assertEquals(Status.DOWNLOADED, run.refreshNow().status)
+        offline(h)
+
+        // Pinned to a release the device does not have: nothing is read.
+        val elsewhere = h.launch { version("v7") }
+        assertNull(elsewhere.version)
+        assertEquals("title", elsewhere.text("title"))
+        // Pinned to the one in use, with a newer one waiting: the pin wins.
+        val pinnedToFirst = h.launch(configure = { nextLaunch(); version("v1") })
+        assertEquals("v1", pinnedToFirst.version)
+        assertEquals("one", pinnedToFirst.text("title"))
+    }
+
+    @Test
+    fun aPinToTheWaitingReleaseTakesIt() {
+        val h = Harness(folder.root)
+        val nextLaunch: LocalizeConfig.Builder.() -> Unit = { updatePolicy(UpdatePolicy.NEXT_LAUNCH) }
+        h.launchWith("en" to """{ "title": "one" }""")
+        val run = h.launch(configure = nextLaunch)
+        h.transport.pointer("v2")
+        h.transport.file("v2", "en", """{ "title": "two" }""")
+        assertEquals(Status.DOWNLOADED, run.refreshNow().status)
+        offline(h)
+
+        val pinned = h.launch { version("v2") }
+        assertEquals("v2", pinned.version)
+        assertEquals("two", pinned.text("title"))
+    }
+
+    @Test
     fun nextLaunchModeReportsAReleaseItCouldNotStore() {
         val notAFolder = folder.newFile("blocked")
         val h = Harness(notAFolder)

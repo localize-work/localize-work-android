@@ -12,7 +12,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const CLDR_JSON_TAG = '49.0.0';
+const CLDR_JSON_TAG = '47.0.0';
 const SOURCE = `https://raw.githubusercontent.com/unicode-org/cldr-json/${CLDR_JSON_TAG}/cldr-json/cldr-core/supplemental/plurals.json`;
 
 const CATEGORIES = ['zero', 'one', 'two', 'few', 'many', 'other'];

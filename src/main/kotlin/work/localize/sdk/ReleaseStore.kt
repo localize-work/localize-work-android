@@ -25,9 +25,11 @@ internal class ReleaseStore(root: File, projectSlug: String, private val cdnBase
 
     /**
      * The release to use at start, or `null` when there is none. A release
-     * waiting for the next launch becomes the one in use. Never throws.
+     * waiting for the next launch becomes the one in use. With a [pinned]
+     * version only that version is taken, whichever of the two holds it; a
+     * device that holds other versions keeps them and gets `null`. Never throws.
      */
-    fun load(): Release? {
+    fun load(pinned: String? = null): Release? {
         try {
             val state = readState()
             if (state == null) {
@@ -37,7 +39,14 @@ internal class ReleaseStore(root: File, projectSlug: String, private val cdnBase
             }
             var active = state.active?.let(::readRelease)
             val pending = state.pending?.let(::readRelease)
-            if (pending != null) active = pending
+            if (pinned != null) {
+                active = sequenceOf(pending, active).firstOrNull { it?.version == pinned }
+                // What is there belongs to the configuration that follows the
+                // latest release; a refresh replaces it with the pinned one.
+                if (active == null) return null
+            } else if (pending != null) {
+                active = pending
+            }
             if (active == null) {
                 wipe()
                 return null

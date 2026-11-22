@@ -104,4 +104,24 @@ class JsonTest {
             Json.write(linkedMapOf("a" to "\"\\\n\r\t\u0001\u001F", "b" to Double.NaN, "c" to listOf(true, false), "d" to emptyMap<String, Any?>())),
         )
     }
+
+    @Test
+    fun whatJsonDoesNotAllowIsRefusedSoABrokenFileIsNeverStored() {
+        for (text in listOf(
+            "{ \"title\": \"line one\nline two\" }",
+            "{ \"title\": \"tab\there\" }",
+            """{ "n": 01 }""",
+            """{ "n": -012.5 }""",
+        )) {
+            try {
+                Json.parse(text)
+                fail("accepted: $text")
+            } catch (expected: JsonException) {
+                // refused
+            }
+        }
+        // The same written as JSON allows.
+        assertEquals(mapOf("title" to "line one\nline two"), Json.parse("""{ "title": "line one\nline two" }"""))
+        assertEquals(mapOf("n" to 0L, "m" to 0.5, "k" to -10L), Json.parse("""{ "n": 0, "m": 0.5, "k": -10 }"""))
+    }
 }

@@ -2,6 +2,7 @@ package work.localize.sdk
 
 import java.util.concurrent.CopyOnWriteArrayList
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Rule
@@ -126,8 +127,9 @@ class UpdatesTest {
         assertEquals(Status.APPLIED, results.single().status)
         assertEquals("Tere", client.text("title"))
         assertEquals("English only", client.text("only"))
-        // Told once for the switch and once when the new file arrived.
-        assertEquals(listOf<String?>("v1", "v1"), heard.toList())
+        // Told once for the switch, when no release could be read for the
+        // new locale yet, and once when its file had arrived.
+        assertEquals(listOf<String?>(null, "v1"), heard.toList())
 
         // The files of both locales are on the device now.
         h.transport.unreachable(POINTER_URL)
@@ -151,7 +153,10 @@ class UpdatesTest {
 
         assertEquals(Status.FAILED, results.single().status)
         assertEquals("et", client.locale)
-        assertEquals("Hello", client.text("title"))
+        // The release has no Estonian file, so it is not read: the bundled
+        // strings are in Estonian, the release's English text is not.
+        assertNull(client.version)
+        assertEquals("title", client.text("title"))
 
         h.transport.pointer("v1")
         assertEquals(Status.APPLIED, client.refreshNow().status)
@@ -202,7 +207,7 @@ class UpdatesTest {
         assertEquals(listOf(POINTER_URL, fileUrl("v2", "et"), fileUrl("v1", "et")), h.transport.requests)
         assertEquals("v1", client.version)
         assertEquals("Tere v1", client.text("title"))
-        assertEquals(listOf<String?>("v1", "v1"), heard.toList())
+        assertEquals(listOf<String?>(null, "v1"), heard.toList())
 
         // The next launch gets v2 whole, offline.
         h.transport.unreachable(POINTER_URL)
@@ -228,9 +233,67 @@ class UpdatesTest {
 
         client.setLocale("et", null)
 
-        assertEquals("v1", client.version)
-        assertEquals("Hello v1", client.text("title"))
+        // v1 cannot be made whole for Estonian, so it is not read: the app's
+        // bundled strings are shown for the rest of this run.
+        assertNull(client.version)
+        assertEquals("title", client.text("title"))
         assertEquals("Tere v2", h.listeningClient(deviceLocale = "et", configure = nextLaunch).text("title"))
+    }
+
+    /**
+     * The locale is switched while a new release is on its way. What was
+     * fetched for the earlier locale is not a whole release for the new one,
+     * so the same refresh fetches the rest before anything is put in use.
+     */
+    @Test
+    fun aLocaleSwitchedDuringADownloadIsFollowedBeforeTheReleaseIsUsed() {
+        val h = Harness(folder.root)
+        h.launchWith("en" to """{ "title": "Hello v1" }""", "et" to """{ "title": "Tere v1" }""") { fallbackLocale("et") }
+        h.transport.pointer("v2")
+        h.transport.file("v2", "en", """{ "title": "Hello v2" }""")
+        h.transport.file("v2", "et", """{ "title": "Tere v2" }""")
+        val queued = ArrayList<Runnable>()
+        val listeners = CopyOnWriteArrayList<LocalizeListener>()
+        listeners.add(LocalizeListener { version -> heard.add(version) })
+        val client = LocalizeClient(
+            config = LocalizeConfig(SLUG) { cdnBaseUrl(CDN) },
+            cacheRoot = folder.root,
+            deviceLocale = "en",
+            transport = h.transport,
+            bundled = { _, _ -> null },
+            worker = { queued.add(it) },
+            callbacks = { it.run() },
+            listeners = listeners,
+            sleeper = { },
+        )
+        assertEquals("Hello v1", client.text("title"))
+        val seenDuringDownload = ArrayList<String>()
+        h.transport.onRequest = { url ->
+            if (url == fileUrl("v2", "en")) {
+                h.transport.onRequest = { seenDuringDownload.add(client.text("title")) }
+                client.setLocale("et", null)
+                // v1 has the Estonian file, so the switch shows it at once.
+                seenDuringDownload.add(client.text("title"))
+            }
+        }
+
+        val result = client.refreshNow()
+
+        assertEquals(Status.APPLIED, result.status)
+        assertEquals(listOf("Tere v1", "Tere v1"), seenDuringDownload)
+        assertEquals("v2", client.version)
+        assertEquals("Tere v2", client.text("title"))
+        assertEquals(
+            listOf(POINTER_URL, fileUrl("v2", "en"), fileUrl("v2", "et")),
+            h.transport.requests.takeLast(3),
+        )
+        // The refresh the switch asked for finds nothing left to do.
+        h.transport.onRequest = {}
+        queued.single().run()
+        assertEquals("v2", client.version)
+        // What is stored is whole for Estonian.
+        h.transport.unreachable(POINTER_URL)
+        assertEquals("Tere v2", h.listeningClient(deviceLocale = "et").text("title"))
     }
 
     @Test

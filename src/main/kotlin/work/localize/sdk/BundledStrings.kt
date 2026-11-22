@@ -42,10 +42,26 @@ internal object ResourceNames {
  * The resource no longer names its variables, so the arguments are matched by
  * position: the first entry of the argument map is argument 1, and so on. The
  * count of a plural lookup, when it is not in the map itself, takes the
- * position of the text's `%N$d` conversion.
+ * position of the text's `%N$d` conversion, or in a form that does not show
+ * the count the position the text leaves unused.
  */
 internal object BundledText {
     private class Conversion(val start: Int, val end: Int, val position: Int, val type: Char)
+
+    /**
+     * The count's position in a plural form that does not show the count
+     * ("New messages for %2$s"). The export numbers a key's arguments alike in
+     * every form, so the count still holds a position there: the text refers
+     * to one position more than there are other arguments, and the count's is
+     * the lowest one the text leaves unused. `null` when the text does not
+     * show such a gap.
+     */
+    private fun unusedPosition(conversions: List<Conversion>, otherArguments: Int): Int? {
+        val highest = conversions.maxOfOrNull { it.position } ?: return null
+        if (highest != otherArguments + 1) return null
+        val used = conversions.mapTo(HashSet()) { it.position }
+        return (1..highest).firstOrNull { it !in used }
+    }
 
     fun format(raw: String, args: Map<String, Any?>, count: Long?): String {
         val conversions = ArrayList<Conversion>()
@@ -89,7 +105,7 @@ internal object BundledText {
 
         val values = args.values.toList()
         val countPosition = if (count != null && !args.containsKey("count")) {
-            conversions.firstOrNull { it.type == 'd' }?.position
+            conversions.firstOrNull { it.type == 'd' }?.position ?: unusedPosition(conversions, values.size)
         } else {
             null
         }

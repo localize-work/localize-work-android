@@ -14,10 +14,12 @@ The first release.
 - Switches to a downloaded release only when all of its files have arrived,
   either at once or at the next launch of the app.
 - Keeps the last complete release on the device, so texts are available at
-  start and without a connection; a cache that cannot be read is discarded.
+  start and without a connection; a cache that cannot be read is discarded. A
+  stored release is read only when it has every file the current locale needs
+  and, with a pinned version, is that version.
 - Looks a text up in the locale, its base language and a fallback locale, with
-  i18next's key rules, plural forms for whole numbers (CLDR 49, every language
-  CLDR covers) and `{{name}}` placeholders.
+  i18next's key rules and plural lookup, plural forms for whole numbers (CLDR
+  47, every language it covers) and `{{name}}` placeholders.
 - Falls back to the app's own string resources, named the way localize.work's
   Android export names them.
 - A listener reports when texts change; `setLocale` switches the locale while

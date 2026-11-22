@@ -232,15 +232,46 @@ class LookupTest {
     }
 
     @Test
-    fun aMissingCategoryFallsBackToOtherThenToThePlainKey() {
+    fun aMissingCategoryLeavesAFileToItsPlainKeyNotToAnotherForm() {
         val onlyOther = tree("""{ "items_other": "other form", "items": "plain" }""")
         val onlyPlain = tree("""{ "items": "plain" }""")
+        val otherAlone = tree("""{ "items_other": "other form" }""")
 
-        // Russian asks for "few" for 3; the file has only "other".
-        assertEquals("other form", ResourceLookup.find(onlyOther, "items", 3, "ru"))
-        assertEquals("other form", ResourceLookup.find(onlyOther, "items", 1, "en"))
+        // Russian asks for "few" for 3. As in i18next, no other form of the
+        // same file stands in for it: the plain key does, or the next locale.
+        assertEquals("plain", ResourceLookup.find(onlyOther, "items", 3, "ru"))
+        assertEquals("plain", ResourceLookup.find(onlyOther, "items", 1, "en"))
+        assertEquals("other form", ResourceLookup.find(onlyOther, "items", 5, "en"))
         assertEquals("plain", ResourceLookup.find(onlyPlain, "items", 3, "ru"))
         assertEquals("plain", ResourceLookup.find(onlyPlain, "items", 0, "en"))
+        assertNull(ResourceLookup.find(otherAlone, "items", 1, "en"))
+        assertEquals("other form", ResourceLookup.findOther(otherAlone, "items"))
+    }
+
+    @Test
+    fun aVariantThatOverridesOnlyTheOtherFormInheritsTheRest() {
+        val h = Harness(folder.root)
+        val client = h.launchWith(
+            "en-FI" to """{ "items_other": "{{count}} things (FI)" }""",
+            "en" to """{ "items_one": "{{count}} item", "items_other": "{{count}} items" }""",
+        )
+
+        assertEquals("1 item", client.text("items", count = 1))
+        assertEquals("2 things (FI)", client.text("items", count = 2))
+    }
+
+    @Test
+    fun aMissingFormFallsToTheNextLanguageBeforeTheOtherForm() {
+        val h = Harness(folder.root)
+        val client = h.launchWith(
+            "de" to """{ "items_other": "{{count}} Artikel", "solo_other": "{{count}} allein" }""",
+            "en" to """{ "items_one": "{{count}} item", "items_other": "{{count}} items" }""",
+        ) { fallbackLocale("en") }
+
+        assertEquals("1 item", client.text("items", count = 1))
+        assertEquals("3 Artikel", client.text("items", count = 3))
+        // English has nothing for this key, so German's general form is the last resort.
+        assertEquals("1 allein", client.text("solo", count = 1))
     }
 
     @Test

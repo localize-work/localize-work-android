@@ -135,17 +135,21 @@ class PluralRulesTest {
 
     @Test
     fun languagesWithoutPluralForms() {
-        // The brief for this SDK listed Vietnamese here as well. CLDR 49 gives
-        // Vietnamese a "one" form for 0 and 1, and the SDK follows CLDR.
-        for (locale in listOf("ja", "zh", "ko", "th", "id", "in", "zh-Hant-TW", "ms")) {
+        for (locale in listOf("ja", "zh", "ko", "vi", "th", "id", "in", "zh-Hant-TW", "ms")) {
             assertCategory("other", locale, 0, 1, 2, 5, 11, 21, 100, 1_000_000)
         }
     }
 
+    /**
+     * The rules are those of CLDR 47, the release the product and the iOS SDK
+     * use. Later releases changed these two languages; a project's files are
+     * published with the forms CLDR 47 names, so those are the ones to ask for.
+     */
     @Test
-    fun vietnameseFollowsCldr49() {
-        assertCategory("one", "vi", 0, 1)
-        assertCategory("other", "vi", 2, 5, 11, 21, 100, 1_000_000)
+    fun vietnameseAndGalicianFollowTheReleaseTheProductPublishesWith() {
+        assertCategory("other", "vi", 0, 1, 2, 5)
+        assertCategory("one", "gl", 1)
+        assertCategory("other", "gl", 0, 2, 1_000_000, 2_000_000)
     }
 
     @Test
@@ -163,7 +167,7 @@ class PluralRulesTest {
         assertCategory("few", "RU_ru", 3)
         assertCategory("few", "sr-Latn-RS", 3)
         assertCategory("other", "en-u-nu-arab", 3)
-        assertCategory("one", "kok-Latn", 0)
+        assertCategory("one", "hi-Latn", 0)
     }
 
     @Test
@@ -205,7 +209,6 @@ class PluralRulesTest {
 
         assertTrue("only $checked checks ran", checked > 300_000)
         // The table and CLDR list the same languages: nothing missing, nothing invented.
-        // ("kok-latn" needs no entry of its own; it is found through "kok".)
-        assertEquals(cldrLocales - "kok-latn", PluralRules.coveredLanguages())
+        assertEquals(cldrLocales, PluralRules.coveredLanguages())
     }
 }

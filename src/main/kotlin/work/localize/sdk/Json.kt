@@ -178,6 +178,8 @@ internal object Json {
                     return result
                 }
                 if (char != '\\') {
+                    // JSON does not allow a raw control character in a string.
+                    if (char < ' ') throw error("control character in a string")
                     position++
                     continue
                 }
@@ -218,6 +220,7 @@ internal object Json {
             val digitsStart = position
             while (position < text.length && text[position] in '0'..'9') position++
             if (position == digitsStart) throw error("invalid number")
+            if (text[digitsStart] == '0' && position - digitsStart > 1) throw error("number with a leading zero")
             var integral = true
             if (peek() == '.') {
                 integral = false

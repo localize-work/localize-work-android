@@ -17,6 +17,11 @@ android {
 
     defaultConfig {
         minSdk = 21
+        // The library uses nothing newer than its minSdk, so an app need not
+        // compile against the platform this library happens to be built with.
+        aarMetadata {
+            minCompileSdk = 21
+        }
     }
 
     compileOptions {

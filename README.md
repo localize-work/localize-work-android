@@ -10,7 +10,8 @@ stay as the fallback, so the app has every text on first launch and without a
 connection.
 
 - Kotlin, usable from Java
-- Android 5.0 (API level 21) and newer
+- Android 5.0 (API level 21) and newer; your app may compile against any
+  platform version from 21 up
 - No dependencies beyond the Kotlin standard library
 - Sends nothing about the device or the user
 
@@ -151,13 +152,13 @@ Localize.refresh(result -> {
 | `cdnBaseUrl` | `https://cdn.localize.work` | Where published files are served from. |
 | `namespaces` | `translation` | The namespaces to download. |
 | `defaultNamespace` | the first namespace | The namespace a lookup uses when it names none. |
-| `locale` | the device's first preferred locale | The locale to show, such as `et` or `en-FI`. |
+| `locale` | the device's first preferred locale | The locale to show, such as `et` or `en-FI`. Spell it the way your project does (see below). |
 | `fallbackLocale` | none | The locale tried when a text is missing in `locale`. Usually your source language. |
-| `version` | the latest release | Pins one release, such as `"v12"`. |
+| `version` | the latest release | Pins one release, such as `"v12"`. A stored release of another version is then never used. |
 | `updatePolicy` | `IMMEDIATE` | When a downloaded release takes effect: `IMMEDIATE`, or `NEXT_LAUNCH` so texts never change while the app is open. |
 | `refreshOnInit` | `true` | Whether `init` starts a download. |
 | `connectTimeoutMillis` | 10 000 | How long to wait for a connection. |
-| `readTimeoutMillis` | 15 000 | How long to wait for data. |
+| `readTimeoutMillis` | 15 000 | How long to wait for more data. One download may take two minutes in all. |
 | `transport` | built in (`HttpURLConnection`) | Replace the HTTP client, for example with canned answers in a test. |
 | `cacheDirectory` | a folder in the app's private storage | Where releases are kept. |
 
@@ -178,9 +179,21 @@ as an empty slug or a version that is not `v` followed by a number.
 Without a `locale`, the SDK uses the device's first preferred locale as it is
 when `init` runs. If your app has its own language picker, pass the choice as
 `locale` at start, and call `Localize.setLocale("et")` when the user changes it.
-`setLocale` uses the files the device already has for that locale and downloads
-the rest. A change of the system language while the app is running is not
-picked up by itself; call `setLocale` for it too.
+A change of the system language while the app is running is not picked up by
+itself; call `setLocale` for it too.
+
+A release is read whole or not at all. When the device already has every file
+of the new locale, `setLocale` shows them at once. Otherwise the app shows its
+bundled strings, which are in the user's language, until the missing files
+have been downloaded; the same holds at start when the language has changed
+since the release on the device was stored.
+
+A locale is requested from the CDN as it is written, with only its letter case
+corrected (`en_fi` becomes `en-FI`), anything a device adds after the region
+dropped, and the three codes older Android versions still report replaced
+(`iw`, `in`, `ji` become `he`, `id`, `yi`). So spell `locale` and
+`fallbackLocale` the way your project's languages are spelled: a project with
+`sr-Latn-RS` does not answer to `sh-RS`.
 
 ## How a text is found
 
@@ -216,38 +229,43 @@ With a `count`, the SDK looks in each file for, in this order:
 1. `key_zero`, when the count is 0 and the file has that form
 2. `key_<category>`, the plural category of the count in the file's language
    (`one`, `two`, `few`, `many`, `other`)
-3. `key_other`
-4. `key`
+3. `key`
+
+That is i18next's order. A file that has none of them leaves the key to the
+next locale, so a regional locale that overrides only `items_other` still gets
+`items_one` from its base language. Only when no locale has the form or the
+plain key is a locale's `key_other` used, as a last resort.
 
 The category comes from the language of the file being read, so a Russian text
 uses Russian rules and an English fallback uses English rules.
 
-The rules follow Unicode CLDR 49 for whole numbers and are built into the
-library, so every Android version picks the same form. They cover every
-language CLDR has plural rules for:
+The rules follow Unicode CLDR 47 for whole numbers and are built into the
+library, so every Android version picks the same form. CLDR 47 is the release
+localize.work itself uses to decide which plural forms a language has, and the
+iOS SDK uses the same one, so a count takes the same form everywhere. They
+cover every language that release has plural rules for:
 
 | Forms | Languages |
 |---|---|
-| `other` only | bm bo dz hnj id ig ii ja jbo jv jw kde kea km ko lkt lo ms my nqo osa sah ses sg su th to tpi wo yo yue zh |
-| `one` for 1 | af an asa ast az bal bem bez bg brx ce cgg chr ckb da de dv ee el en eo et eu fi fo fur fy gsw ha haw hu ia ie io jgo jmc ka kaj kcg kk kkj kl ks ksb ku ky lb lg lij mas mgo ml mn mr nah nb nd ne nl nn nnh no nr ny nyn om or os pap ps rm rof rwk saq sc sd sdh seh sn so sq ss ssy st sv sw syr ta te teo tig tk tn tr ts ug ur uz ve vo vun wae xh xog yi |
-| `one` for 0 and 1 | ak am as bho bn csw doi fa ff gu guw hi hy kab kn kok ln mg nso pa pcm si tg ti vi wa zu |
-| `one` for 1, `many` for whole millions | ca es gl it lld pt-PT scn vec |
+| `other` only | bm bo dz hnj id ig ii ja jbo jv jw kde kea km ko lkt lo ms my nqo osa sah ses sg su th to tpi vi wo yo yue zh |
+| `one` for 1 | af an asa ast az bal bem bez bg brx ce cgg chr ckb da de dv ee el en eo et eu fi fo fur fy gl gsw ha haw hu ia io jgo jmc ka kaj kcg kk kkj kl ks ksb ku ky lb lg lij mas mgo ml mn mr nah nb nd ne nl nn nnh no nr ny nyn om or os pap ps rm rof rwk saq sc sd sdh seh sn so sq ss ssy st sv sw syr ta te teo tig tk tn tr ts ug ur uz ve vo vun wae xh xog yi |
+| `one` for 0 and 1 | ak am as bho bn csw doi fa ff gu guw hi hy kab kn ln mg nso pa pcm si ti wa zu |
+| `one` for 1, `many` for whole millions | ca es it lld pt-PT scn vec |
 | `one` for 0 and 1, `many` for whole millions | fr pt |
 | `one`, `few`, `many` | be ru uk, pl |
 | `one`, `few` | bs hr sh sr, cs sk, lt, mo ro, shi |
-| `one`, `two`, `few` | dsb hsb sl, gd, sgs |
+| `one`, `two`, `few` | dsb hsb sl, gd |
 | `one`, `two` | he iu naq sat se sma smi smj smn sms |
-| `zero`, `one` | blo cv ksh lag, lv prg |
+| `zero`, `one` | blo ksh lag, lv prg |
 | `one`, by a rule of their own | ceb fil tl, is mk, tzm |
 | up to six forms | ar ars, br, cy, ga, gv, kw, mt |
 
 Every language also has the `other` form. A language that is not in the table uses `one` for exactly 1 and `other` for
 everything else.
 
-Two entries may surprise you. CLDR 49 gives Vietnamese (`vi`) a `one` form for 0
-and 1; earlier CLDR releases had none. Hebrew (`he`) has had no `many` form
-since CLDR 42. A file that has no such form is not a problem: the lookup
-continues with `key_other`.
+Later CLDR releases changed a few languages (Vietnamese gained a `one` form,
+Galician a `many` form). The SDK stays on the release the product publishes
+with, because a project's files hold the forms that release names.
 
 ### 4. Placeholders
 
@@ -289,7 +307,13 @@ The export writes placeholders as numbered arguments (`%1$s`, `%2$s`), numbered
 in the order the variables first appear in the source text. The SDK fills them
 by position: the first entry of the map you pass is argument 1, the second is
 argument 2. `mapOf` and `LinkedHashMap` keep the order you write. The count of a
-plural takes the position of the text's `%1$d`.
+plural takes the position of the text's `%1$d`; in a plural form that does not
+show the count, it takes the position that form leaves unused.
+
+Bundled strings come in the language Android picks for your app. If you set
+`locale` yourself, or call `Localize.setLocale`, on a system where that does
+not change the app's own resources, the bundled fallback can be in another
+language than the downloaded texts.
 
 If your release build removes unused resources, keep your strings, because the
 SDK looks them up by name while the app runs. Add `res/raw/keep.xml`:
@@ -348,6 +372,13 @@ no device identifier, no user identifier and no analytics, and it sets its own
 `User-Agent` (`localize-work-android/0.1.0`) in place of the system default,
 which names the device model. Requests are not authenticated. As with any
 download, the server sees the IP address the request comes from.
+
+The built-in transport uses Android's own HTTP stack. If your app installs a
+process-wide `CookieHandler`, that handler also applies to these requests, as
+it does to every `HttpURLConnection` in the app: cookies it holds for the CDN's
+host are sent along. The localize.work CDN sets no cookies. If you serve the
+files from a host of your own and do not want your app's cookies sent to it,
+pass your own `transport`.
 
 ## Limits of 0.1.0
 

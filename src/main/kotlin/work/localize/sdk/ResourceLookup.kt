@@ -58,19 +58,25 @@ internal object ResourceLookup {
     }
 
     /**
-     * The text for [key] and [count] in a file written in [locale]: the form
-     * for a count of zero when the count is 0 and the file has one, the form
-     * of the count's plural category in that language, the `other` form, then
-     * the key without a suffix. Without a count, the key itself.
+     * The text for [key] and [count] in a file written in [locale], as
+     * i18next looks it up: the form for a count of zero when the count is 0
+     * and the file has one, the form of the count's plural category in that
+     * language, then the key without a suffix. Without a count, the key
+     * itself.
+     *
+     * A file that has none of them leaves the key to the next locale: a
+     * regional variant that overrides only the `other` form inherits its
+     * `one` form from the base language.
      */
     fun find(tree: Map<String, Any?>, key: String, count: Long?, locale: String): String? {
         if (count == null) return find(tree, key)
         if (count == 0L) find(tree, "${key}_${PluralRules.ZERO}")?.let { return it }
-        val category = PluralRules.category(locale, count)
-        find(tree, "${key}_$category")?.let { return it }
-        if (category != PluralRules.OTHER) find(tree, "${key}_${PluralRules.OTHER}")?.let { return it }
+        find(tree, "${key}_${PluralRules.category(locale, count)}")?.let { return it }
         return find(tree, key)
     }
+
+    /** The general plural form of [key]: the last resort when no locale has the count's own form. */
+    fun findOther(tree: Map<String, Any?>, key: String): String? = find(tree, "${key}_${PluralRules.OTHER}")
 
     private fun walkNested(tree: Map<String, Any?>, segments: List<String>): Any? {
         var node: Any? = tree

@@ -5,8 +5,10 @@ package work.localize.sdk
  *
  * The rules are written out here instead of asking the platform, so that every
  * Android version (and a plain JVM in unit tests) picks the same form. They
- * follow CLDR 49 and are checked in the unit tests against vectors generated
- * from the CLDR data for all of its languages; see
+ * follow CLDR 47: the release localize.work itself uses to decide which
+ * plural forms a language has, and the one the iOS SDK follows, so a count
+ * takes the same form everywhere. They are checked in the unit tests against
+ * vectors generated from the CLDR data for all of its languages; see
  * `tools/generate-plural-vectors.mjs`.
  *
  * Only whole numbers are covered. Decimal counts have their own rules in many
@@ -35,24 +37,24 @@ internal object PluralRules {
         // No plural forms.
         family(
             "bm bo dz hnj id ig ii ja jbo jv jw kde kea km ko lkt lo ms my nqo osa sah ses sg su th to " +
-                "tpi und wo yo yue zh",
+                "tpi und vi wo yo yue zh",
         ) { OTHER }
 
         // "one" for exactly 1.
         family(
             "af an asa ast az bal bem bez bg brx ce cgg chr ckb da de dv ee el en eo et eu fi fo fur fy " +
-                "gsw ha haw hu ia ie io jgo jmc ka kaj kcg kk kkj kl ks ksb ku ky lb lg lij mas mgo ml mn " +
+                "gl gsw ha haw hu ia io jgo jmc ka kaj kcg kk kkj kl ks ksb ku ky lb lg lij mas mgo ml mn " +
                 "mr nah nb nd ne nl nn nnh no nr ny nyn om or os pap ps rm rof rwk saq sc sd sdh seh sn " +
                 "so sq ss ssy st sv sw syr ta te teo tig tk tn tr ts ug ur uz ve vo vun wae xh xog yi",
         ) { n -> if (n == 1L) ONE else OTHER }
 
         // "one" for 0 and 1.
         family(
-            "ak am as bho bn csw doi fa ff gu guw hi hy kab kn kok ln mg nso pa pcm si tg ti vi wa zu",
+            "ak am as bho bn csw doi fa ff gu guw hi hy kab kn ln mg nso pa pcm si ti wa zu",
         ) { n -> if (n <= 1L) ONE else OTHER }
 
         // "one" for 1, "many" for whole millions.
-        family("ca es gl it lld pt-pt scn vec") { n ->
+        family("ca es it lld pt-pt scn vec") { n ->
             when {
                 n == 1L -> ONE
                 n != 0L && n % 1_000_000L == 0L -> MANY
@@ -126,17 +128,6 @@ internal object PluralRules {
             }
         }
 
-        family("sgs") { n ->
-            val mod10 = n % 10
-            val mod100 = n % 100
-            when {
-                mod10 == 1L && mod100 != 11L -> ONE
-                n == 2L -> TWO
-                mod10 in 2..9 && mod100 !in 11..19 -> FEW
-                else -> OTHER
-            }
-        }
-
         family("lv prg") { n ->
             val mod10 = n % 10
             val mod100 = n % 100
@@ -177,7 +168,7 @@ internal object PluralRules {
         }
 
         // "zero" for 0, "one" for 1.
-        family("blo cv ksh lag") { n ->
+        family("blo ksh lag") { n ->
             when (n) {
                 0L -> ZERO
                 1L -> ONE

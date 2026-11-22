@@ -52,6 +52,25 @@ class BundledTextTest {
         )
     }
 
+    /**
+     * The export numbers a key's arguments alike in every plural form. A form
+     * that does not show the count ("New messages for %2$s") still leaves the
+     * count's position unused, and the other arguments keep theirs.
+     */
+    @Test
+    fun aPluralFormThatDoesNotShowTheCountStillSkipsItsPosition() {
+        assertEquals("New messages for Ann", BundledText.format("New messages for %2\$s", mapOf("name" to "Ann"), 2))
+        assertEquals(
+            "Ann sent Bob files",
+            BundledText.format("%1\$s sent %3\$s files", linkedMapOf("from" to "Ann", "to" to "Bob"), 5),
+        )
+        // The form that does show it is filled as before.
+        assertEquals("1 message for Ann", BundledText.format("%1\$d message for %2\$s", mapOf("name" to "Ann"), 1))
+        // Without a count, or with every position in use, positions are the arguments' own.
+        assertEquals("Hello %2\$s", BundledText.format("Hello %2\$s", mapOf("name" to "Ann"), null))
+        assertEquals("Ann and Bob", BundledText.format("%1\$s and %2\$s", linkedMapOf("a" to "Ann", "b" to "Bob"), 2))
+    }
+
     @Test
     fun unnumberedConversionsAreTakenInTurn() {
         assertEquals("Ann and Bob", BundledText.format("%s and %s", linkedMapOf("a" to "Ann", "b" to "Bob"), null))

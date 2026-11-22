@@ -148,7 +148,8 @@ public object Localize {
     /**
      * Switches to another locale, such as `et` or `en-FI`, for the rest of
      * this run of the app, and downloads its files if the device does not have
-     * them yet. To start in a chosen locale, pass it to [LocalizeConfig.Builder.locale].
+     * them yet; until they have arrived the app's bundled strings are shown.
+     * To start in a chosen locale, pass it to [LocalizeConfig.Builder.locale].
      *
      * @throws IllegalArgumentException when [locale] is not a language tag
      */
@@ -168,7 +169,10 @@ public object Localize {
     public val locale: String?
         get() = client?.locale
 
-    /** The release in use, such as `v12`, or `null` when none has been downloaded yet. */
+    /**
+     * The release in use, such as `v12`, or `null` when there is none yet, or
+     * none that has every file of the current locale.
+     */
     @JvmStatic
     public val version: String?
         get() = client?.version
