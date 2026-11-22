@@ -265,12 +265,19 @@ class UpdatesTest {
 
         client.setLocale("et", results::add)
 
-        // v2 still waits, and the Estonian file comes from v1, the release on screen.
-        assertEquals(Status.DOWNLOADED, results.single().status)
+        // v2 still waits, and the Estonian file comes from v1, the release on
+        // screen. The texts changed, so that is what the result says, with
+        // the release now read; the one that waits is told of next time.
+        assertEquals(Status.APPLIED, results.single().status)
+        assertEquals("v1", results.single().version)
         assertEquals(listOf(fileUrl("v1", "et"), POINTER_URL, fileUrl("v2", "et")), h.transport.requests)
         assertEquals("v1", client.version)
         assertEquals("Tere v1", client.text("title"))
         assertEquals(listOf<String?>(null, "v1"), heard.toList())
+        val after = client.refreshNow()
+        assertEquals(Status.DOWNLOADED, after.status)
+        assertEquals("v2", after.version)
+        assertEquals("Tere v1", client.text("title"))
 
         // The next launch gets v2 whole, offline.
         h.transport.unreachable(POINTER_URL)
@@ -439,9 +446,12 @@ class UpdatesTest {
                 assertEquals(Status.APPLIED, result.status)
                 assertEquals("Tere v2", client.text("title"))
             } else {
-                assertEquals(Status.DOWNLOADED, result.status)
+                // v2 waits; what changed on screen is v1 in Estonian.
+                assertEquals(Status.APPLIED, result.status)
+                assertEquals("v1", result.version)
                 assertEquals("v1", client.version)
                 assertEquals("Tere v1", client.text("title"))
+                assertEquals(Status.DOWNLOADED, client.refreshNow().status)
             }
         }
     }

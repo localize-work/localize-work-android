@@ -53,13 +53,21 @@ public class RefreshResult internal constructor(
 ) {
     public enum class Status {
         /**
-         * Lookups read other texts now. A new release is in use; or the one
-         * this run started with is, which lacked files for the locale or
-         * could not be read from the device until now.
+         * Lookups read other texts now: redraw. A new release is in use; or
+         * the one this run started with is, which lacked files for the locale
+         * or could not be read from the device until now. [version] is the
+         * release lookups read. With [UpdatePolicy.NEXT_LAUNCH] a newer
+         * release may have been stored for the next launch by the same
+         * refresh; this result does not mention it, and the next refresh
+         * reports it as [DOWNLOADED].
          */
         APPLIED,
 
-        /** A new release is stored and takes effect the next time the app starts ([UpdatePolicy.NEXT_LAUNCH]). */
+        /**
+         * A new release is stored and takes effect the next time the app
+         * starts, and lookups read what they read before
+         * ([UpdatePolicy.NEXT_LAUNCH]).
+         */
         DOWNLOADED,
 
         /** The release already in use is the current one, and lookups read what they read before. */

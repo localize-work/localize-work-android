@@ -111,6 +111,10 @@ override fun onStop() {
 }
 ```
 
+The listener is called when a release starts being read, and also when
+`Localize.setLocale` changes the locale, whether or not anything had to be
+downloaded for it. So one `render()` covers both.
+
 The SDK does not check for new releases on a timer. Call `Localize.refresh()`
 when it suits your app, for example when it comes back to the foreground:
 
@@ -125,10 +129,13 @@ Localize.refresh { result ->
 }
 ```
 
-`APPLIED` says that lookups read other texts now. That is a new release in use,
-and also the release the run started with when this refresh made it usable: it
-fetched the files it lacked for the locale, or could read it from the device at
-last.
+`APPLIED` says that lookups read other texts now, and `result.version` is the
+release they read. That is a new release in use, and also the release the run
+started with when this refresh made it usable: it fetched the files it lacked
+for the locale, or could read it from the device at last. With `NEXT_LAUNCH`
+the same refresh may have stored a newer release for the next start as well;
+`APPLIED` does not mention that one, and the next refresh reports it as
+`DOWNLOADED`.
 
 Listeners and callbacks are called on the main thread.
 
@@ -154,7 +161,7 @@ Localize.refresh(result -> {
 | Setting | Default | What it does |
 |---|---|---|
 | project slug | required | The project to load, as in `https://cdn.localize.work/{slug}/…`. |
-| `cdnBaseUrl` | `https://cdn.localize.work` | Where published files are served from. |
+| `cdnBaseUrl` | `https://cdn.localize.work` | Where published files are served from. A slash at the end makes no difference. |
 | `namespaces` | `translation` | The namespaces to download. |
 | `defaultNamespace` | the first namespace | The namespace a lookup uses when it names none. |
 | `locale` | the device's first preferred locale | The locale to show, such as `et` or `en-FI`. Spell it the way your project does (see below). |
@@ -363,7 +370,8 @@ downloaded again; it never crashes the app. Files that cannot be looked at,
 because the device's storage is locked or their folder cannot be entered, are
 left alone and read again later. Releases are stored per project, and a change
 of `cdnBaseUrl` discards them. The same `cacheDirectory` written another way,
-through a symbolic link or with `/.` in the path, is the same folder.
+through a symbolic link or with `/.` in the path, is the same folder, before
+it exists and after.
 
 A configuration pinned to a `version` shares the project's folder with one that
 follows `latest.json`, and each leaves only its own releases there. A refresh
@@ -455,7 +463,7 @@ up to three times. Anything else is final for that refresh:
 | `latest.json` does not name a release like `v12` | Failed, as a configuration problem. Not retried. |
 | A translation file returns 404 | Treated as an empty file. Normal for regional variants. |
 | A translation file returns another 4xx, or is not JSON | Failed. |
-| A pinned `version` has no files at all | Failed, so a release that is not published yet is picked up once it is. |
+| A pinned `version` has no files at all | Failed, so a release that is not published yet is picked up once it is. The SDK can tell that only from the files: a pinned release with no file for any of the locales asked for looks the same, and fails the same way at every refresh while nothing of it is stored; the app shows its bundled strings. Set a `fallbackLocale` the project has, so that a file is always found. |
 
 `result.error.isRetryable` tells you whether trying again later can help.
 

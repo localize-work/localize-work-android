@@ -499,10 +499,15 @@ class CacheTest {
         assertTrue(state.setReadable(true))
         h.transport.pointer("v2")
         h.transport.file("v2", "en", """{ "title": "two" }""")
-        assertEquals(Status.DOWNLOADED, client.refreshNow().status)
+        val result = client.refreshNow()
 
+        // The texts changed, so that is what the result says; the release
+        // that waits is told of by the refresh after it.
+        assertEquals(Status.APPLIED, result.status)
+        assertEquals("v1", result.version)
         assertEquals("v1", client.version)
         assertEquals("one", client.text("title"))
+        assertEquals(Status.DOWNLOADED, client.refreshNow().status)
         // It is the run's release for a client that follows, too.
         assertEquals("one", h.launch(continuing = client, configure = nextLaunch).text("title"))
         offline(h)
@@ -634,6 +639,70 @@ class CacheTest {
         }
         offline(h)
         assertEquals("two", h.launch(configure = nextLaunch).text("title"))
+    }
+
+    /**
+     * The folder is the same one before the project's folder exists and
+     * after. A first launch creates it, and the SDK set up again after that
+     * is still the same run: what it downloaded keeps waiting. Through a
+     * symbolic link, which is resolved whether or not the folder under it
+     * exists yet.
+     */
+    @Test
+    fun theCacheFolderIsTheSameRunBeforeAndAfterItIsCreated() {
+        val root = folder.newFolder("cache")
+        val link = File(folder.root, "link")
+        java.nio.file.Files.createSymbolicLink(link.toPath(), root.toPath())
+        val h = Harness(link)
+        val nextLaunch: LocalizeConfig.Builder.() -> Unit = { updatePolicy(UpdatePolicy.NEXT_LAUNCH) }
+        h.transport.pointer("v1")
+        h.transport.file("v1", "en", """{ "title": "one" }""")
+        val before = ReleaseStore(link, SLUG, CDN).folderIdentity
+        var client = h.launch(configure = nextLaunch)
+        assertFalse(File(root, SLUG).exists())
+
+        assertEquals(Status.DOWNLOADED, client.refreshNow().status)
+
+        assertTrue(File(root, SLUG).exists())
+        assertEquals(before, ReleaseStore(link, SLUG, CDN).folderIdentity)
+        assertEquals(before, ReleaseStore(root, SLUG, CDN).folderIdentity)
+        for (spelling in listOf(link, root)) {
+            client = h.launch(continuing = client, root = spelling, configure = nextLaunch)
+            assertNull(spelling.path, client.version)
+            assertEquals(spelling.path, "title", client.text("title"))
+        }
+        offline(h)
+        assertEquals("one", h.launch(configure = nextLaunch).text("title"))
+    }
+
+    /**
+     * `https://cdn.example` and `https://cdn.example/` are one CDN: the
+     * requests are the same, so the stored release is the same one too, and
+     * so is the run.
+     */
+    @Test
+    fun aSlashAtTheEndOfTheCdnAddressIsTheSameCdn() {
+        val h = Harness(folder.root)
+        val slashed: LocalizeConfig.Builder.() -> Unit = {
+            updatePolicy(UpdatePolicy.NEXT_LAUNCH)
+            cdnBaseUrl("$CDN/")
+        }
+        val plain: LocalizeConfig.Builder.() -> Unit = { updatePolicy(UpdatePolicy.NEXT_LAUNCH) }
+        h.launchWith("en" to """{ "title": "one" }""")
+
+        // Stored under one spelling, read under the other, and nothing deleted.
+        var client = h.launch(configure = slashed)
+        assertEquals("one", client.text("title"))
+        assertEquals(setOf("state.json", "v1.json"), projectFolder().list()!!.toSet())
+
+        // What the run downloads under one spelling waits under the other.
+        h.transport.pointer("v2")
+        h.transport.file("v2", "en", """{ "title": "two" }""")
+        assertEquals(Status.DOWNLOADED, client.refreshNow().status)
+        client = h.launch(continuing = client, configure = plain)
+        assertEquals("one", client.text("title"))
+        offline(h)
+        assertEquals("two", h.launch(configure = plain).text("title"))
     }
 
     /**

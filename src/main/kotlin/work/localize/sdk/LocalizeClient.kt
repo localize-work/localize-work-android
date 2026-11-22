@@ -224,11 +224,15 @@ internal class LocalizeClient(
             applied = applied || pass.completedHeld || pass.result?.status == RefreshResult.Status.APPLIED
             val result = pass.result
             if (result != null && stillHolds(view)) {
-                // Nothing newer is published, but lookups read other texts
-                // now: files this refresh fetched, or the stored release it
-                // could read at last.
-                val upToDate = result.status == RefreshResult.Status.UP_TO_DATE
-                return if (applied && upToDate) RefreshResult(RefreshResult.Status.APPLIED, result.version, null) else result
+                // Nothing newer is in use, but lookups read other texts now:
+                // files this refresh fetched, or the stored release it could
+                // read at last. That is what the caller hears, with the
+                // release now read, also when a newer one was stored for the
+                // next launch: the next refresh tells of that one.
+                val quiet = result.status == RefreshResult.Status.UP_TO_DATE ||
+                    result.status == RefreshResult.Status.DOWNLOADED
+                if (!applied || !quiet) return result
+                return RefreshResult(RefreshResult.Status.APPLIED, snapshot.usable?.version ?: result.version, null)
             }
         }
         return failed(
