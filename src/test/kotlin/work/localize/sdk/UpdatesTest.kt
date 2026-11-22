@@ -385,6 +385,136 @@ class UpdatesTest {
         assertEquals("Tere v2", h.listeningClient(deviceLocale = "et").text("title"))
     }
 
+    /**
+     * The locale is switched while a newer release is on its way, to one the
+     * release on screen has on the CDN but not on the device. As at the start
+     * of any refresh the release held comes first, so its own texts in the
+     * new locale are shown while the rest of the newer one is fetched.
+     */
+    @Test
+    fun aLocaleSwitchedDuringADownloadIsFirstCompletedFromTheReleaseHeld() {
+        for (policy in UpdatePolicy.values()) {
+            val root = folder.newFolder()
+            val h = Harness(root)
+            h.transport.file("v1", "et", """{ "title": "Tere v1" }""")
+            h.launchWith("en" to """{ "title": "Hello v1" }""")
+            h.transport.pointer("v2")
+            h.transport.file("v2", "en", """{ "title": "Hello v2" }""")
+            h.transport.file("v2", "et", """{ "title": "Tere v2" }""")
+            val queued = ArrayList<Runnable>()
+            val client = LocalizeClient(
+                config = LocalizeConfig(SLUG) {
+                    cdnBaseUrl(CDN)
+                    fallbackLocale("en")
+                    updatePolicy(policy)
+                },
+                cacheRoot = root,
+                deviceLocale = "en",
+                transport = h.transport,
+                bundled = { _, _ -> null },
+                worker = { queued.add(it) },
+                callbacks = { it.run() },
+                sleeper = { },
+            )
+            assertEquals(policy.name, "Hello v1", client.text("title"))
+            h.transport.requests.clear()
+            val seen = LinkedHashMap<String, String>()
+            h.transport.onRequest = { url ->
+                if (url == fileUrl("v2", "en")) client.setLocale("et", null)
+                seen[url] = client.text("title", fallback = "bundled")
+            }
+
+            val result = client.refreshNow()
+
+            h.transport.onRequest = {}
+            assertEquals(
+                policy.name,
+                listOf(POINTER_URL, fileUrl("v2", "en"), fileUrl("v1", "et"), fileUrl("v2", "et")),
+                h.transport.requests.toList(),
+            )
+            // Bundled strings only until the release held has its Estonian file.
+            assertEquals(policy.name, "bundled", seen[fileUrl("v1", "et")])
+            assertEquals(policy.name, "Tere v1", seen[fileUrl("v2", "et")])
+            if (policy == UpdatePolicy.IMMEDIATE) {
+                assertEquals(Status.APPLIED, result.status)
+                assertEquals("Tere v2", client.text("title"))
+            } else {
+                assertEquals(Status.DOWNLOADED, result.status)
+                assertEquals("v1", client.version)
+                assertEquals("Tere v1", client.text("title"))
+            }
+        }
+    }
+
+    /**
+     * A release that has no file at all for the new locale. Asked for
+     * directly, its "not found" answers could also mean the release is gone
+     * from the CDN, so the app's bundled strings stay. Once the pointer has
+     * named that version it is known to be there: the missing files are
+     * empty ones, and the texts come from the fallback locale, as they would
+     * after a fresh start in that locale.
+     */
+    @Test
+    fun aReleaseWithoutTheNewLocaleIsReadOnceThePointerNamesIt() {
+        for (policy in UpdatePolicy.values()) {
+            val h = Harness(folder.newFolder())
+            h.launchWith("en" to """{ "title": "Hello" }""")
+            val configure: LocalizeConfig.Builder.() -> Unit = {
+                updatePolicy(policy)
+                fallbackLocale("en")
+            }
+            val client = h.launch(configure = configure)
+            h.transport.status(POINTER_URL, 503)
+            val results = ArrayList<RefreshResult>()
+
+            client.setLocale("fr", results::add)
+
+            assertEquals(policy.name, Status.FAILED, results.single().status)
+            assertNull(policy.name, client.version)
+            assertEquals(policy.name, "Bonjour (bundled)", client.text("title", fallback = "Bonjour (bundled)"))
+
+            h.transport.pointer("v1")
+            assertEquals(policy.name, Status.APPLIED, client.refreshNow().status)
+            assertEquals(policy.name, "v1", client.version)
+            assertEquals(policy.name, "Hello", client.text("title", fallback = "Bonjour (bundled)"))
+            // A start in French reads the same, offline.
+            h.transport.unreachable(POINTER_URL)
+            val next = h.launch(deviceLocale = "fr", configure = configure)
+            assertEquals(policy.name, "Hello", next.text("title", fallback = "Bonjour (bundled)"))
+        }
+    }
+
+    /**
+     * The release could not be stored, so it is in use from memory only.
+     * Setting the SDK up again for another locale is still the same run: the
+     * new client goes on from that release and needs only the new locale's
+     * files, not the pointer.
+     */
+    @Test
+    fun aReleaseThatCouldNotBeStoredIsKeptWhenTheSdkIsSetUpAgain() {
+        val h = Harness(folder.newFile("blocked"))
+        h.transport.pointer("v1")
+        h.transport.file("v1", "en", """{ "title": "Hello" }""")
+        h.transport.file("v1", "et", """{ "title": "Tere" }""")
+        val first = h.launch()
+        assertEquals(Status.APPLIED, first.refreshNow().status)
+        assertEquals("Hello", first.text("title"))
+
+        h.transport.status(POINTER_URL, 503)
+        val second = h.launch(deviceLocale = "et", continuing = first) { fallbackLocale("en") }
+        assertNull(second.version)
+        assertEquals(Status.FAILED, second.refreshNow().status)
+        assertEquals("v1", second.version)
+        assertEquals("Tere", second.text("title"))
+        assertEquals(1, h.transport.requests.count { it == fileUrl("v1", "en") })
+
+        // The same locale again: nothing is missing, so it is read at once.
+        val third = h.launch(deviceLocale = "et", continuing = second) { fallbackLocale("en") }
+        assertEquals("Tere", third.text("title"))
+        // A real start has nothing: the release never reached the device.
+        assertNull(h.launch(deviceLocale = "et").version)
+    }
+
     @Test
     fun aLocaleThatIsNotALanguageTagIsRefused() {
         val client = Harness(folder.root).listeningClient()

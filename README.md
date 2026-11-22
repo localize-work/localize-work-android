@@ -376,13 +376,25 @@ release the app shows:
    next start, with `IMMEDIATE` it is used once it is complete. If it cannot
    be downloaded, the refresh reports the failure, and step 2 still holds.
 
-When the release has no files for the new language at all, the app shows its
-bundled strings until the next start. A regional locale such as `en-FI` needs
-no file of its own for this: the release's `en` texts are enough.
+A release may have no file at all for the new language. What happens then
+depends on whether the release is known to be the published one:
+
+- Once `latest.json` has named that release, it is read like any other: a file
+  it does not have counts as empty, and the texts come from the fallback
+  locale. A start in that language reads the same.
+- Until then the app shows its bundled strings. That is while `latest.json`
+  cannot be read, and with `NEXT_LAUNCH` also while it names a newer release,
+  which waits for the next start. A release that answers "not found" for every
+  file of a language may also be one the CDN no longer keeps, and the bundled
+  strings are in the user's language.
+
+A regional locale such as `en-FI` needs no file of its own for any of this:
+the release's `en` texts are enough.
 
 Calling `Localize.init` again replaces the configuration. The earlier one
 stops: a download it still has under way stores nothing, so it cannot write
-over what the new one stores.
+over what the new one stores. The new one goes on from the release the earlier
+one held, also when that release could not be stored.
 
 **Failures.** A request that gets no answer, or a server error (5xx), is tried
 up to three times. Anything else is final for that refresh:

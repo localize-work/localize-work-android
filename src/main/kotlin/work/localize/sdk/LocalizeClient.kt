@@ -65,21 +65,23 @@ internal class LocalizeClient(
 
     init {
         val locale = LocaleTags.canonicalize(config.locale ?: deviceLocale).ifEmpty { "und" }
-        // With the next-launch policy the release a run of the app shows is
-        // decided when the app starts. A client that takes over from another
-        // one for the same project is still the same run, so it reads what
-        // that one held, not the release that waits on the device. That
-        // holds for a run that started with nothing, too.
-        val sameRun = continuing?.takeIf {
-            config.updatePolicy == UpdatePolicy.NEXT_LAUNCH && it.store.isSameAs(store)
-        }
-        val started = if (sameRun != null) {
-            val matchesPin = { release: Release -> config.version == null || release.version == config.version }
+        // A client that takes over from another one for the same project is
+        // still the same run of the app, and goes on from the release that
+        // one held.
+        val sameRun = continuing?.takeIf { it.store.isSameAs(store) }
+        val matchesPin = { release: Release -> config.version == null || release.version == config.version }
+        val started = if (sameRun != null && config.updatePolicy == UpdatePolicy.NEXT_LAUNCH) {
+            // The release a run shows is decided when the app starts, so it
+            // is what that client held, not the release that waits on the
+            // device. That holds for a run that started with nothing, too.
             val (held, waiting) = sameRun.heldAndPending()
             pending = waiting?.takeIf(matchesPin)
             held?.takeIf(matchesPin)
         } else {
-            store.load(config.version)
+            // The newest release is read as soon as it is here, and the
+            // stored one is that. When a release could not be stored it is
+            // in use from memory only, and is not dropped for that.
+            store.load(config.version) ?: sameRun?.heldAndPending()?.first?.takeIf(matchesPin)
         }
         snapshot = snapshotOf(locale, LocaleTags.chain(locale, config.fallbackLocale), started)
     }
@@ -189,6 +191,7 @@ internal class LocalizeClient(
         // newer release can be reached.
         val startChain = snapshot.chain
         val completedHeld = completeReleaseInUse(startChain)
+        var completedLater = false
         var chain = startChain
         var version: String? = null
         val result = try {
@@ -201,7 +204,15 @@ internal class LocalizeClient(
             // version before anything is put in use.
             var fetched: Map<String, Map<String, NamespaceTree>> = emptyMap()
             for (attempt in 1..MAX_LOCALE_CHANGES) {
-                // Files of an immutable version the app already holds are not fetched again.
+                // After a switch of locale the release held comes first, as
+                // it does at the start of a refresh.
+                if (chain != startChain && completeReleaseInUse(chain)) completedLater = true
+                // Files of an immutable version the app already holds are not
+                // fetched again. A version the pointer (or the pin) names is
+                // there, so a file it does not have is an empty file, and
+                // the texts of that locale come from the next one in the
+                // chain. [completeReleaseInUse] cannot take that for granted
+                // of the release it completes.
                 val held = synchronized(stateLock) {
                     sequenceOf(snapshot.release, pending).firstOrNull { it?.version == resolved }
                 }
@@ -233,10 +244,11 @@ internal class LocalizeClient(
         } catch (failure: RuntimeException) {
             failed(version, LocalizeException(Reason.INVALID_RESPONSE, "refresh failed: $failure", cause = failure))
         }
-        // The locale was switched while this refresh ran: the release held
-        // gets the newer locale's files as well.
+        // The locale was switched while this refresh ran, and the refresh
+        // ended before it came to that: the release held gets the newer
+        // locale's files as well.
         val current = snapshot.chain
-        val completedLater = current != startChain && !closed && completeReleaseInUse(current)
+        if (current != startChain && !closed && completeReleaseInUse(current)) completedLater = true
         if ((completedHeld || completedLater) && result.status == RefreshResult.Status.UP_TO_DATE) {
             // Nothing newer is published, but files this refresh fetched are in use now.
             return RefreshResult(RefreshResult.Status.APPLIED, result.version, null)
