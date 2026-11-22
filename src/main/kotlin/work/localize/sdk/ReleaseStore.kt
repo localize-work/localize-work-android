@@ -18,10 +18,27 @@ import java.io.IOException
  * the old state or the new one. Anything that cannot be read is thrown away;
  * the cache is only ever a copy of what the CDN serves.
  *
- * Not safe for use from several threads at once; the caller serialises access.
+ * Reads and writes of every store exclude each other, so a client that is
+ * being replaced and its replacement never work on the folder at once, and a
+ * store that was [close]d writes nothing more.
  */
 internal class ReleaseStore(root: File, projectSlug: String, private val cdnBaseUrl: String) {
     private val directory = File(root, directoryName(projectSlug))
+
+    /** Guarded by [DISK_LOCK]. */
+    private var closed = false
+
+    /** Whether [other] keeps the same project's releases in the same place. */
+    fun isSameAs(other: ReleaseStore): Boolean =
+        directory == other.directory && cdnBaseUrl == other.cdnBaseUrl
+
+    /**
+     * Stops this store from writing. Returns once a write that was under way
+     * has finished, so whoever takes over the folder reads a settled state.
+     */
+    fun close() {
+        synchronized(DISK_LOCK) { closed = true }
+    }
 
     /**
      * The release to use at start, or `null` when there is none. A release
@@ -29,7 +46,9 @@ internal class ReleaseStore(root: File, projectSlug: String, private val cdnBase
      * version only that version is taken, whichever of the two holds it; a
      * device that holds other versions keeps them and gets `null`. Never throws.
      */
-    fun load(pinned: String? = null): Release? {
+    fun load(pinned: String? = null): Release? = synchronized(DISK_LOCK) { loadLocked(pinned) }
+
+    private fun loadLocked(pinned: String?): Release? {
         try {
             val state = readState()
             if (state == null) {
@@ -82,7 +101,8 @@ internal class ReleaseStore(root: File, projectSlug: String, private val cdnBase
         removeAllExcept(setOfNotNull(activeVersion, pendingVersion))
     }
 
-    private inline fun save(write: () -> Unit): Boolean =
+    private inline fun save(write: () -> Unit): Boolean = synchronized(DISK_LOCK) {
+        if (closed) return false
         try {
             if (!directory.isDirectory && !directory.mkdirs() && !directory.isDirectory) {
                 throw IOException("cannot create $directory")
@@ -94,6 +114,7 @@ internal class ReleaseStore(root: File, projectSlug: String, private val cdnBase
         } catch (failure: SecurityException) {
             false
         }
+    }
 
     private class State(val active: String?, val pending: String?)
 
@@ -144,7 +165,10 @@ internal class ReleaseStore(root: File, projectSlug: String, private val cdnBase
                 stream.fd.sync()
             }
             if (!temporary.renameTo(target)) {
-                // Some file systems do not rename over an existing file.
+                // Some file systems do not rename over an existing file. The
+                // file in place is given up only while its replacement is
+                // there to take its place.
+                if (!temporary.isFile) throw IOException("cannot replace $target")
                 target.delete()
                 if (!temporary.renameTo(target)) throw IOException("cannot replace $target")
             }
@@ -167,6 +191,9 @@ internal class ReleaseStore(root: File, projectSlug: String, private val cdnBase
     }
 
     internal companion object {
+        /** One lock for every store: two stores of one folder must not interleave. */
+        private val DISK_LOCK = Any()
+
         const val STATE_FILE = "state.json"
         private const val MAX_STATE_BYTES = 64L * 1024
         private const val MAX_RELEASE_BYTES = 256L * 1024 * 1024

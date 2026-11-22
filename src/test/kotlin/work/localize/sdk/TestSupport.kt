@@ -56,8 +56,25 @@ internal class Harness(private val cacheRoot: File, val transport: FakeTransport
 
     private val direct = Executor { task -> task.run() }
 
-    /** A new client: what a launch of the app gets from `Localize.init`. */
-    fun launch(deviceLocale: String = "en", configure: LocalizeConfig.Builder.() -> Unit = {}): LocalizeClient =
+    /**
+     * A new client: what a launch of the app gets from `Localize.init`. With
+     * [continuing], what a later `Localize.init` in the same run gets: the
+     * earlier client is closed first, as `Localize.init` does.
+     */
+    fun launch(
+        deviceLocale: String = "en",
+        continuing: LocalizeClient? = null,
+        configure: LocalizeConfig.Builder.() -> Unit = {},
+    ): LocalizeClient {
+        continuing?.close()
+        return client(deviceLocale, continuing, configure)
+    }
+
+    private fun client(
+        deviceLocale: String,
+        continuing: LocalizeClient?,
+        configure: LocalizeConfig.Builder.() -> Unit,
+    ): LocalizeClient =
         LocalizeClient(
             config = LocalizeConfig(SLUG) {
                 cdnBaseUrl(CDN)
@@ -72,6 +89,7 @@ internal class Harness(private val cacheRoot: File, val transport: FakeTransport
             worker = direct,
             callbacks = direct,
             sleeper = { millis -> sleeps.add(millis) },
+            continuing = continuing,
         )
 }
 
@@ -91,7 +109,7 @@ internal fun Harness.launchWith(
 ): LocalizeClient {
     transport.pointer("v1")
     for ((locale, json) in files) transport.file("v1", locale, json)
-    val client = launch(deviceLocale, configure)
+    val client = launch(deviceLocale, configure = configure)
     check(client.refreshNow().status == RefreshResult.Status.APPLIED) { "the test release did not load" }
     return client
 }

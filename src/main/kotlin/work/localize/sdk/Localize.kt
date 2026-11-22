@@ -57,26 +57,34 @@ public object Localize {
      * small file read), then, unless [LocalizeConfig.refreshOnInit] is off,
      * downloads the current release in the background.
      *
-     * Calling it again replaces the earlier configuration.
+     * Calling it again replaces the earlier configuration, whose downloads
+     * then store nothing more. It is still the same run of the app: with
+     * [UpdatePolicy.NEXT_LAUNCH] the release on screen stays, and one that
+     * waits for the next launch keeps waiting.
      */
     @JvmStatic
     public fun init(context: Context, config: LocalizeConfig) {
         val application = context.applicationContext ?: context
         val mainThread = Handler(Looper.getMainLooper())
-        val created = LocalizeClient(
-            config = config,
-            cacheRoot = config.cacheDirectory ?: File(application.noBackupFilesDir, "localize-work"),
-            deviceLocale = deviceLocale(application),
-            transport = config.transport
-                ?: HttpUrlConnectionTransport(config.connectTimeoutMillis, config.readTimeoutMillis),
-            bundled = AndroidBundledStrings(application),
-            worker = worker,
-            callbacks = { task -> mainThread.post(task) },
-            listeners = listeners,
-        )
         synchronized(this) {
-            client?.close()
-            client = created
+            // The client being replaced may still be downloading. It is
+            // stopped first, which waits for a write to the device that is
+            // under way, so the new client reads a settled state and the old
+            // one writes nothing over what the new one stores.
+            val previous = client
+            previous?.close()
+            client = LocalizeClient(
+                config = config,
+                cacheRoot = config.cacheDirectory ?: File(application.noBackupFilesDir, "localize-work"),
+                deviceLocale = deviceLocale(application),
+                transport = config.transport
+                    ?: HttpUrlConnectionTransport(config.connectTimeoutMillis, config.readTimeoutMillis),
+                bundled = AndroidBundledStrings(application),
+                worker = worker,
+                callbacks = { task -> mainThread.post(task) },
+                listeners = listeners,
+                continuing = previous,
+            )
         }
         if (config.refreshOnInit) refresh()
     }

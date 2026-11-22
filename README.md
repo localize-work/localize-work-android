@@ -188,7 +188,10 @@ A release is read whole or not at all. When the device already has every file
 of the new locale, `setLocale` shows them at once. Otherwise the app shows its
 bundled strings, which are in the user's language, until the missing files
 have been downloaded; the same holds at start when the language has changed
-since the release on the device was stored.
+since the release on the device was stored. They are fetched from that same
+release first, so the change of language works even while the newest release
+cannot be reached. Files already downloaded for a release are kept with it:
+going back to a language the app used before needs no download.
 
 A locale is requested from the CDN as it is written, with only its letter case
 corrected (`en_fi` becomes `en-FI`), anything a device adds after the region
@@ -357,11 +360,29 @@ release is used as soon as it is complete, and listeners are told. With
 changes while the user is looking at it. On the very first launch that means
 the app shows its bundled strings until it is started again.
 
-`setLocale` does not end the run. With `NEXT_LAUNCH` the app keeps the release
-it started with, and files that release lacks for the new locale are fetched
-from that same release. When it has none for the new locale, the app shows its
+A change of language does not end the run, and by itself never changes which
+release the app shows:
+
+1. The release a run shows is decided when the app starts: the stored release
+   if it is whole for the language, otherwise none. With `NEXT_LAUNCH` it
+   changes only at the next start, also after `setLocale` or after
+   `Localize.init` is called again. A run that started with no release shows
+   bundled strings to its end.
+2. After a change of language, the files that release lacks for the new
+   language are fetched from that same release and added to it, since no text
+   the app already shows from it changes. This needs neither the newest
+   release nor `latest.json` to be reachable.
+3. A newer release is handled as always: with `NEXT_LAUNCH` it waits for the
+   next start, with `IMMEDIATE` it is used once it is complete. If it cannot
+   be downloaded, the refresh reports the failure, and step 2 still holds.
+
+When the release has no files for the new language at all, the app shows its
 bundled strings until the next start. A regional locale such as `en-FI` needs
 no file of its own for this: the release's `en` texts are enough.
+
+Calling `Localize.init` again replaces the configuration. The earlier one
+stops: a download it still has under way stores nothing, so it cannot write
+over what the new one stores.
 
 **Failures.** A request that gets no answer, or a server error (5xx), is tried
 up to three times. Anything else is final for that refresh:

@@ -17,6 +17,8 @@ import work.localize.sdk.LocalizeException.Reason
  * @param deviceLocale the locale to use when the configuration names none
  * @param worker runs downloads; must not be the caller's thread in production
  * @param callbacks delivers results and listener calls (the main thread on Android)
+ * @param continuing the client this one takes the place of while the app
+ *   keeps running; it must have been [close]d
  */
 internal class LocalizeClient(
     private val config: LocalizeConfig,
@@ -28,6 +30,7 @@ internal class LocalizeClient(
     private val callbacks: Executor,
     private val listeners: CopyOnWriteArrayList<LocalizeListener> = CopyOnWriteArrayList(),
     sleeper: Sleeper = Sleeper { millis -> Thread.sleep(millis) },
+    continuing: LocalizeClient? = null,
 ) {
     /**
      * @param release the release the app holds for this run, which after a
@@ -62,8 +65,26 @@ internal class LocalizeClient(
 
     init {
         val locale = LocaleTags.canonicalize(config.locale ?: deviceLocale).ifEmpty { "und" }
-        snapshot = snapshotOf(locale, LocaleTags.chain(locale, config.fallbackLocale), store.load(config.version))
+        // With the next-launch policy the release a run of the app shows is
+        // decided when the app starts. A client that takes over from another
+        // one for the same project is still the same run, so it reads what
+        // that one held, not the release that waits on the device. That
+        // holds for a run that started with nothing, too.
+        val sameRun = continuing?.takeIf {
+            config.updatePolicy == UpdatePolicy.NEXT_LAUNCH && it.store.isSameAs(store)
+        }
+        val started = if (sameRun != null) {
+            val matchesPin = { release: Release -> config.version == null || release.version == config.version }
+            val (held, waiting) = sameRun.heldAndPending()
+            pending = waiting?.takeIf(matchesPin)
+            held?.takeIf(matchesPin)
+        } else {
+            store.load(config.version)
+        }
+        snapshot = snapshotOf(locale, LocaleTags.chain(locale, config.fallbackLocale), started)
     }
+
+    private fun heldAndPending(): Pair<Release?, Release?> = synchronized(stateLock) { snapshot.release to pending }
 
     /** The locale texts are shown in. */
     val locale: String get() = snapshot.locale
@@ -139,9 +160,14 @@ internal class LocalizeClient(
         }
     }
 
-    /** Stops this client from changing anything further; used when [Localize] is set up again. */
+    /**
+     * Stops this client from changing anything further; used when [Localize]
+     * is set up again. Returns once a write to the device that was under way
+     * has finished; none is started after it.
+     */
     fun close() {
         closed = true
+        store.close()
     }
 
     /**
@@ -157,7 +183,13 @@ internal class LocalizeClient(
 
     private fun refreshLocked(): RefreshResult {
         if (closed) return replaced(null)
-        var chain = snapshot.chain
+        // First the release the app already holds. After a change of locale
+        // it lacks the new locale's files; they come from that same version,
+        // whatever is published now and whether or not the pointer or a
+        // newer release can be reached.
+        val startChain = snapshot.chain
+        val completedHeld = completeReleaseInUse(startChain)
+        var chain = startChain
         var version: String? = null
         val result = try {
             val resolved = loader.resolveVersion()
@@ -201,8 +233,13 @@ internal class LocalizeClient(
         } catch (failure: RuntimeException) {
             failed(version, LocalizeException(Reason.INVALID_RESPONSE, "refresh failed: $failure", cause = failure))
         }
-        if (config.updatePolicy == UpdatePolicy.NEXT_LAUNCH && version != null && !closed) {
-            completeReleaseInUse(snapshot.chain, version)
+        // The locale was switched while this refresh ran: the release held
+        // gets the newer locale's files as well.
+        val current = snapshot.chain
+        val completedLater = current != startChain && !closed && completeReleaseInUse(current)
+        if ((completedHeld || completedLater) && result.status == RefreshResult.Status.UP_TO_DATE) {
+            // Nothing newer is published, but files this refresh fetched are in use now.
+            return RefreshResult(RefreshResult.Status.APPLIED, result.version, null)
         }
         return result
     }
@@ -236,38 +273,45 @@ internal class LocalizeClient(
     }
 
     /**
-     * [UpdatePolicy.NEXT_LAUNCH] only. A newer release waits for the next
-     * launch, so the one in use stays in use for the rest of this run. If the
-     * locale was switched to one it has no files for, they are fetched from
-     * that same release: adding files of the version already shown changes no
-     * text on screen and mixes nothing.
+     * Makes the release the app holds whole for [chain], from its own
+     * version, and returns whether that put it in use. A change of locale
+     * never changes which version is shown: the files the release lacks for
+     * the new locale are fetched from that same release, since adding files
+     * of the version already shown changes no text on screen and mixes
+     * nothing. Nothing is thrown: when the files cannot be had now, the app
+     * shows bundled strings and the next refresh tries again.
      *
-     * When none of the missing files exists, the old release may be gone from
-     * the CDN, and reading it with empty files would show its fallback
-     * language in place of the app's bundled strings. It is completed all the
-     * same when every locale that lacks files is a regional form of a
-     * language the release has texts for: a regional locale without
-     * overrides of its own has no file, and that is normal.
+     * When none of the missing files exists, the release may be gone from the
+     * CDN, and reading it with empty files would show its fallback language
+     * in place of the app's bundled strings. It is completed all the same
+     * when every locale that lacks files is a regional form of a language the
+     * release has texts for: a regional locale without overrides of its own
+     * has no file, and that is normal.
      */
-    private fun completeReleaseInUse(chain: List<String>, currentVersion: String) {
-        val active = snapshot.release ?: return
-        if (active.version == currentVersion || active.hasAll(chain, config.namespaces)) return
+    private fun completeReleaseInUse(chain: List<String>): Boolean {
+        val active = snapshot.release ?: return false
+        if (active.hasAll(chain, config.namespaces)) return false
         val more = try {
             download(active.version, chain, active)
         } catch (failure: LocalizeException) {
-            return
+            return false
         } catch (failure: RuntimeException) {
-            return
+            return false
         }
-        if (closed) return
-        if (more.foundNothing && !more.files.keys.all { isRegionalFormOfHeldLanguage(active, it) }) return
-        synchronized(stateLock) {
+        if (closed) return false
+        if (more.foundNothing && !more.files.keys.all { isRegionalFormOfHeldLanguage(active, it) }) return false
+        val usable = synchronized(stateLock) {
             val current = snapshot
+            // The release may have been replaced while the files were on their way.
+            if (current.release !== active) return false
             val extended = active.plus(more.files)
             store.save(extended.version, pending?.version, extended)
-            snapshot = snapshotOf(current.locale, current.chain, extended)
+            val next = snapshotOf(current.locale, current.chain, extended)
+            snapshot = next
+            next.usable != null
         }
-        notifyListeners(active.version)
+        if (usable) notifyListeners(active.version)
+        return usable
     }
 
     private fun isRegionalFormOfHeldLanguage(release: Release, locale: String): Boolean =

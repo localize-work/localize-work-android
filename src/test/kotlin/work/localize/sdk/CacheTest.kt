@@ -296,6 +296,7 @@ class CacheTest {
 
         // The device language is German now, and there is no connection.
         offline(h)
+        h.transport.unreachable(fileUrl("v1", "de"))
         val german = h.launch(deviceLocale = "de") { fallbackLocale("en") }
         assertNull(german.version)
         assertEquals("Hallo (gebündelt)", german.text("title"))
@@ -308,7 +309,9 @@ class CacheTest {
         h.transport.file("v1", "en", """{ "title": "Hello" }""")
         h.transport.requests.clear()
         assertEquals(Status.APPLIED, german.refreshNow().status)
-        assertEquals(listOf(POINTER_URL, fileUrl("v1", "de")), h.transport.requests)
+        // The release that is there is completed first, from its own version;
+        // the pointer then confirms it is still the published one.
+        assertEquals(listOf(fileUrl("v1", "de"), POINTER_URL), h.transport.requests)
         assertEquals("Hallo", german.text("title"))
         // An English launch still reads it.
         assertEquals("Hello", h.launch().text("title"))
@@ -382,6 +385,21 @@ class CacheTest {
         assertEquals("v1", next.version)
         assertEquals("one", next.text("title"))
         assertEquals(setOf("state.json", "v1.json"), projectFolder().list()!!.toSet())
+    }
+
+    /** A store that was closed writes nothing, and what is on the device stays. */
+    @Test
+    fun aClosedStoreWritesNothing() {
+        val files = mapOf("en" to mapOf("translation" to mapOf<String, Any?>("title" to "one")))
+        val first = ReleaseStore(folder.root, SLUG, CDN)
+        assertTrue(first.save("v1", null, Release("v1", files)))
+        first.close()
+
+        assertFalse(first.save("v2", null, Release("v2", files)))
+
+        val second = ReleaseStore(folder.root, SLUG, CDN)
+        assertEquals("v1", second.load()?.version)
+        assertEquals(listOf("state.json", "v1.json"), projectFolder().list()!!.sorted())
     }
 
     @Test
