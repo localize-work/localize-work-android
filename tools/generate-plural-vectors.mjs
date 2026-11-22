@@ -1,0 +1,137 @@
+#!/usr/bin/env node
+// Generates src/test/resources/plural-vectors.txt from the Unicode CLDR
+// cardinal plural rules, so the unit tests check the SDK's own plural table
+// against CLDR for every language and a wide range of whole numbers.
+//
+//   node tools/generate-plural-vectors.mjs [path/to/plurals.json]
+//
+// Without an argument the file is downloaded from the cldr-json repository at
+// the release named in CLDR_JSON_TAG below.
+
+import { readFileSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const CLDR_JSON_TAG = '49.0.0';
+const SOURCE = `https://raw.githubusercontent.com/unicode-org/cldr-json/${CLDR_JSON_TAG}/cldr-json/cldr-core/supplemental/plurals.json`;
+
+const CATEGORIES = ['zero', 'one', 'two', 'few', 'many', 'other'];
+const LETTER = { zero: 'z', one: 'o', two: 't', few: 'f', many: 'm', other: 'x' };
+
+/** The whole numbers every language is checked on. */
+export function sampleNumbers() {
+  const numbers = [];
+  for (let n = 0; n <= 1200; n++) numbers.push(n);
+  for (const base of [2000, 3000, 5000, 10000, 20000, 21000, 40000, 60000, 80000, 100000, 200000,
+    300000, 1000000, 2000000, 3000000, 5000000, 10000000, 11000000, 100000000, 1000000000]) {
+    for (const offset of [0, 1, 2, 3, 4, 5, 6, 9, 10, 11, 12, 14, 19, 20, 21, 22, 25, 71, 72, 91, 92, 99, 100, 101]) {
+      numbers.push(base + offset);
+    }
+  }
+  numbers.push(1100000, 1500000, 100000 + 1000000, 2147483647);
+  return [...new Set(numbers)].sort((a, b) => a - b);
+}
+
+/** Evaluates one CLDR rule for a whole number (no decimals, no compact exponent). */
+function matches(rule, n) {
+  const condition = rule.split('@')[0].trim();
+  if (condition === '') return true;
+  const operand = (name) => {
+    if (name === 'n' || name === 'i') return n;
+    if ('vwftce'.includes(name)) return 0;
+    throw new Error(`unknown operand ${name}`);
+  };
+  return condition.split(/\s+or\s+/).some((conjunction) =>
+    conjunction.split(/\s+and\s+/).every((relation) => {
+      const match = /^([a-z])(?:\s*%\s*(\d+))?\s*(!?=)\s*(.+)$/.exec(relation.trim());
+      if (!match) throw new Error(`cannot parse relation "${relation}"`);
+      let value = operand(match[1]);
+      if (match[2]) value %= Number(match[2]);
+      const inList = match[4].split(',').some((part) => {
+        const [low, high] = part.trim().split('..').map(Number);
+        return high === undefined ? value === low : value >= low && value <= high;
+      });
+      return match[3] === '=' ? inList : !inList;
+    }),
+  );
+}
+
+function categoryOf(rules, n) {
+  for (const category of CATEGORIES) {
+    const rule = rules[`pluralRule-count-${category}`];
+    if (rule !== undefined && matches(rule, n)) return category;
+  }
+  return 'other';
+}
+
+/** The whole-number samples CLDR lists for a rule, used to check this evaluator. */
+function integerSamples(rule) {
+  const part = /@integer([^@]*)/.exec(rule);
+  if (!part) return [];
+  const samples = [];
+  for (const token of part[1].split(',').map((t) => t.trim())) {
+    if (token === '' || token === '…' || /[ce]/.test(token)) continue;
+    const [low, high] = token.split('~').map(Number);
+    if (high === undefined) samples.push(low);
+    else for (let n = low; n <= high; n++) samples.push(n);
+  }
+  return samples;
+}
+
+async function loadRules(path) {
+  const text = path ? readFileSync(path, 'utf8') : await (await fetch(SOURCE)).text();
+  return JSON.parse(text).supplemental['plurals-type-cardinal'];
+}
+
+const cardinal = await loadRules(process.argv[2]);
+const numbers = sampleNumbers();
+const families = new Map();
+let checkedSamples = 0;
+let intlDifferences = 0;
+
+for (const [locale, rules] of Object.entries(cardinal)) {
+  for (const category of CATEGORIES) {
+    const rule = rules[`pluralRule-count-${category}`];
+    if (rule === undefined) continue;
+    for (const n of integerSamples(rule)) {
+      checkedSamples++;
+      if (categoryOf(rules, n) !== category) {
+        throw new Error(`${locale}: CLDR sample ${n} should be ${category}, got ${categoryOf(rules, n)}`);
+      }
+    }
+  }
+  const vector = numbers.map((n) => LETTER[categoryOf(rules, n)]).join('');
+  if (!families.has(vector)) families.set(vector, []);
+  families.get(vector).push(locale);
+
+  // A second opinion from the JavaScript engine's own CLDR data, which may be
+  // a release behind; differences are reported, not fatal.
+  try {
+    if (Intl.PluralRules.supportedLocalesOf([locale]).length > 0) {
+      const intl = new Intl.PluralRules(locale);
+      const differs = numbers.filter((n) => intl.select(n) !== categoryOf(rules, n));
+      if (differs.length > 0) {
+        intlDifferences++;
+        console.warn(`note: ${locale} differs from this Node's Intl.PluralRules at ${differs.slice(0, 8).join(', ')}`);
+      }
+    }
+  } catch {
+    // Not a locale this engine knows; nothing to compare.
+  }
+}
+
+const lines = [
+  `# Generated by tools/generate-plural-vectors.mjs from CLDR ${CLDR_JSON_TAG} (cardinal rules, whole numbers).`,
+  '# Do not edit by hand. Letters: z zero, o one, t two, f few, m many, x other.',
+  `numbers: ${numbers.join(' ')}`,
+];
+for (const [vector, locales] of [...families.entries()].sort((a, b) => a[1][0].localeCompare(b[1][0]))) {
+  lines.push(`${locales.sort().join(' ')}: ${vector}`);
+}
+
+const output = join(dirname(fileURLToPath(import.meta.url)), '..', 'src', 'test', 'resources', 'plural-vectors.txt');
+writeFileSync(output, `${lines.join('\n')}\n`);
+console.log(
+  `${Object.keys(cardinal).length} locales in ${families.size} rule families, ${numbers.length} numbers each; ` +
+    `${checkedSamples} CLDR samples checked; ${intlDifferences} locales differ from this Node's Intl data.`,
+);
