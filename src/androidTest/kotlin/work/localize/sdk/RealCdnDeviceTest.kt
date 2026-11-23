@@ -3,6 +3,7 @@ package work.localize.sdk
 import android.content.pm.PackageManager
 import android.net.SSLCertificateSocketFactory
 import android.net.http.X509TrustManagerExtensions
+import android.os.Build
 import android.os.SystemClock
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import java.io.File
@@ -12,10 +13,12 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
+import java.util.concurrent.atomic.AtomicReference
 import javax.net.ssl.SSLSocket
 import javax.net.ssl.TrustManagerFactory
 import javax.net.ssl.X509TrustManager
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -24,8 +27,10 @@ import org.junit.runner.RunWith
  * HTTPS to the real CDN with the library's own transport: a handful of plain
  * `GET`s for public files of the project `example-project`.
  *
- * The README promises Android 5.0 and newer, so success is asserted on every
- * version. Where it fails, the log says why, with the device's clock and the
+ * The README says which versions can download from it: Android 7.1.1 and
+ * later. Older ones do not know the authority that signs the CDN's
+ * certificate, and there the documented failure is asserted. Where a
+ * download fails, the log says why, with the device's clock and the
  * certificates the server sent, so that a wrong date is not taken for a
  * missing root certificate.
  */
@@ -34,9 +39,30 @@ class RealCdnDeviceTest {
     private val host = "cdn.localize.work"
     private val project = "example-project"
 
+    /** Android 7.1.1 is the first version whose own certificates vouch for the CDN's. */
+    private val trustsTheCdn = Device.sdk >= Build.VERSION_CODES.N_MR1
+
+    /** What the README quotes of the failure on older versions. */
+    private val untrusted = "Trust anchor for certification path not found"
+
     @Test
     fun theBuiltInTransportReadsThePointerAndAFile() {
         val transport = HttpUrlConnectionTransport(connectTimeoutMillis = 10_000, readTimeoutMillis = 15_000)
+        if (!trustsTheCdn) {
+            val failure = try {
+                transport.get("https://$host/$project/latest.json")
+                null
+            } catch (refused: Exception) {
+                refused
+            }
+            Report.line("https", "RESULT transport: ${failure?.let { "FAILED ${causes(it)}" } ?: "success"}")
+            whyItFailed()
+            assertTrue(
+                "HTTPS to $host on API ${Device.sdk}, where the README says it fails: ${failure?.let(::causes)}",
+                failure != null && causes(failure).contains("SSLHandshakeException") && causes(failure).contains(untrusted),
+            )
+            return
+        }
         try {
             val pointer = transport.get("https://$host/$project/latest.json")
             Report.line("https", "latest.json: status ${pointer.status}, body ${pointer.body.trim().take(80)}")
@@ -71,15 +97,25 @@ class RealCdnDeviceTest {
                     },
                 )
             }
-            var result: RefreshResult? = null
-            Localize.refresh { result = it }
-            assertTrue("no result within 90 s", Device.waitFor(90_000) { result != null })
-            val outcome = result!!
+            val result = AtomicReference<RefreshResult?>()
+            Localize.refresh { result.set(it) }
+            assertTrue("no result within 90 s", Device.waitFor(90_000) { result.get() != null })
+            val outcome = result.get()!!
             Report.line(
                 "https",
                 "RESULT Localize.refresh: ${outcome.status} ${outcome.version}" +
                     (outcome.error?.let { " reason=${it.reason} retryable=${it.isRetryable} ${causes(it)}" } ?: ""),
             )
+            if (!trustsTheCdn) {
+                // As the README has it: a network error, marked retryable, and no release.
+                assertEquals(RefreshResult.Status.FAILED, outcome.status)
+                assertNull(outcome.version)
+                assertEquals(LocalizeException.Reason.NETWORK, outcome.error!!.reason)
+                assertTrue(outcome.error!!.isRetryable)
+                assertTrue(causes(outcome.error!!), causes(outcome.error!!).contains(untrusted))
+                assertNull(Localize.version)
+                return
+            }
             if (!outcome.isSuccess) {
                 throw AssertionError("Localize.refresh failed on API ${Device.sdk}: ${causes(outcome.error!!)}", outcome.error)
             }

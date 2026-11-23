@@ -244,11 +244,11 @@ internal class AndroidBundledStrings(context: Context) : BundledStrings {
      * The app's resources as Android resolves them for one language ([own]),
      * and as it resolves them for a language no app has resources in
      * ([default]): the ones in `values/`. The two differ in the language and
-     * in nothing else, at any moment: both are fixed to the configuration the
-     * app had when they were made ([seen]), and are made anew once the app's
-     * has changed. Two sets that followed the app would not change together,
-     * and a lookup on another thread while the screen turns would compare a
-     * portrait text with a landscape one.
+     * in nothing else: both are fixed to the qualifiers the app had when they
+     * were made ([seen]), and are made anew once the app's have changed. Two
+     * sets that followed the app would not change together, and a lookup on
+     * another thread while the screen turns would compare a portrait text
+     * with a landscape one.
      *
      * @param probes the whole numbers that show whether a `plurals` resource
      *   is the one in `values/`
@@ -332,13 +332,13 @@ internal class AndroidBundledStrings(context: Context) : BundledStrings {
 
     private fun languageOf(locale: String): Language? {
         val current = resources.configuration
-        language?.let { if (it.locale == locale && it.seen.diff(current) == 0) return it }
+        language?.let { if (it.locale == locale && sameQualifiers(it.seen, current)) return it }
         val asked = Locale.forLanguageTag(locale)
         if (asked.language.isEmpty()) return null
         val none = Locale.forLanguageTag(NO_LANGUAGE)
-        // Copied once: both sets of resources start from the same values,
-        // also when the app's configuration changes while it is read.
-        val seen = Configuration(current)
+        // Read once: both sets of resources start from the same values, also
+        // when the app's configuration changes while it is read.
+        val seen = qualifiersOf(current)
         return Language(
             locale, seen, resourcesIn(asked, asked, seen), resourcesIn(none, asked, seen), BundledPlurals.probes(locale),
         ).also { language = it }
@@ -347,17 +347,69 @@ internal class AndroidBundledStrings(context: Context) : BundledStrings {
     /**
      * The app's resources for [locale], laid out as for [direction], with
      * every other qualifier, such as night mode or the screen's size, as in
-     * [app]. Android keeps what a context like this one names over what the
-     * app changes to later, so naming all of them keeps these resources as
+     * [qualifiers]. Android keeps what a context like this one names over
+     * what the app changes to later, so naming them keeps these resources as
      * they are. The direction is set apart from the locale so that both sets
      * of resources read the same folders but for the language's.
      */
-    private fun resourcesIn(locale: Locale, direction: Locale, app: Configuration): Resources {
-        val override = Configuration(app)
+    private fun resourcesIn(locale: Locale, direction: Locale, qualifiers: Configuration): Resources {
+        val override = Configuration(qualifiers)
         override.setLocale(locale)
         override.setLayoutDirection(direction)
         return context.createConfigurationContext(override).resources
     }
+
+    /**
+     * A configuration of the library's own with the qualifiers of [app] that
+     * decide which folder a resource is read from, but for the language.
+     *
+     * The app's configuration is the object Android itself keeps and changes,
+     * on the main thread. It is only read here, field by field: copying it
+     * whole, or comparing it with `diff`, makes Android tidy the language
+     * list of the object it is given, and on another thread, in the middle
+     * of a change of language, that could leave the app with the wrong list.
+     */
+    private fun qualifiersOf(app: Configuration): Configuration {
+        val own = Configuration()
+        own.fontScale = app.fontScale
+        own.mcc = app.mcc
+        own.mnc = app.mnc
+        own.orientation = app.orientation
+        own.screenLayout = app.screenLayout
+        own.uiMode = app.uiMode
+        own.screenWidthDp = app.screenWidthDp
+        own.screenHeightDp = app.screenHeightDp
+        own.smallestScreenWidthDp = app.smallestScreenWidthDp
+        own.densityDpi = app.densityDpi
+        own.touchscreen = app.touchscreen
+        own.keyboard = app.keyboard
+        own.keyboardHidden = app.keyboardHidden
+        own.hardKeyboardHidden = app.hardKeyboardHidden
+        own.navigation = app.navigation
+        own.navigationHidden = app.navigationHidden
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) own.colorMode = app.colorMode
+        return own
+    }
+
+    /** Whether [app] still has the qualifiers [seen] was made with; see [qualifiersOf]. */
+    private fun sameQualifiers(seen: Configuration, app: Configuration): Boolean =
+        seen.fontScale == app.fontScale &&
+            seen.mcc == app.mcc &&
+            seen.mnc == app.mnc &&
+            seen.orientation == app.orientation &&
+            seen.screenLayout == app.screenLayout &&
+            seen.uiMode == app.uiMode &&
+            seen.screenWidthDp == app.screenWidthDp &&
+            seen.screenHeightDp == app.screenHeightDp &&
+            seen.smallestScreenWidthDp == app.smallestScreenWidthDp &&
+            seen.densityDpi == app.densityDpi &&
+            seen.touchscreen == app.touchscreen &&
+            seen.keyboard == app.keyboard &&
+            seen.keyboardHidden == app.keyboardHidden &&
+            seen.hardKeyboardHidden == app.hardKeyboardHidden &&
+            seen.navigation == app.navigation &&
+            seen.navigationHidden == app.navigationHidden &&
+            (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || seen.colorMode == app.colorMode)
 
     private fun quantity(count: Long): Int = count.coerceIn(Int.MIN_VALUE.toLong(), Int.MAX_VALUE.toLong()).toInt()
 

@@ -163,20 +163,22 @@ class OwnLanguageStringsDeviceTest {
     /**
      * Codes Android renamed: `iw`, `in` and `tl` are the folder names older
      * tools and devices know for Hebrew, Indonesian and Filipino. The library
-     * is asked with the new code. Nothing here is from the README; the cases
-     * only have to agree with what Android itself shows, and the log says
-     * what that is on this version.
+     * is asked with the new code and with the old one. For Hebrew and
+     * Indonesian the README says which folder is read: the one with the old
+     * code, on every version. Of Filipino it says nothing; those cases only
+     * have to agree with what Android itself shows, and the log says what
+     * that is on this version.
      */
     @Test
     fun renamedLanguageCodes() {
         val m = Mismatches()
         for (user in listOf("he", "iw")) {
-            m.case(user, "s_he_iw", NOT_STATED)
-            m.case(user, "s_he_he", NOT_STATED)
+            m.case(user, "s_he_iw", "עברית (iw)")
+            m.case(user, "s_he_he", null)
         }
         for (user in listOf("id", "in")) {
-            m.case(user, "s_id_in", NOT_STATED)
-            m.case(user, "s_id_id", NOT_STATED)
+            m.case(user, "s_id_in", "Indonesia (in)")
+            m.case(user, "s_id_id", null)
         }
         for (user in listOf("fil", "tl")) {
             m.case(user, "s_fil", NOT_STATED)

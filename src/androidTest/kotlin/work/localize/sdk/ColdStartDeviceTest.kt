@@ -4,6 +4,7 @@ import android.os.Process
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import java.io.File
+import java.util.concurrent.atomic.AtomicReference
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
@@ -74,13 +75,13 @@ class ColdStartDeviceTest {
             assertEquals("Samm 2 (bundled et)", Localize.string("step2"))
             assertEquals("Step 3 (release en v7)", Localize.string("step3"))
         }
-        var result: RefreshResult? = null
-        Localize.refresh { result = it }
-        assertTrue(Device.waitFor(60_000) { result != null })
-        assertEquals(RefreshResult.Status.FAILED, result!!.status)
+        val result = AtomicReference<RefreshResult?>()
+        Localize.refresh { result.set(it) }
+        assertTrue(Device.waitFor(60_000) { result.get() != null })
+        assertEquals(RefreshResult.Status.FAILED, result.get()!!.status)
         assertEquals("v7", Localize.version)
         assertEquals("Samm 1 (release et v7)", Localize.string("step1"))
-        Report.line("cold-start", "read v7 in process ${Process.myPid()}, stored by process $earlierProcess; refresh offline: ${result!!.status}")
+        Report.line("cold-start", "read v7 in process ${Process.myPid()}, stored by process $earlierProcess; refresh offline: ${result.get()!!.status}")
         note.delete()
         File(context.noBackupFilesDir, "localize-work").deleteRecursively()
     }
