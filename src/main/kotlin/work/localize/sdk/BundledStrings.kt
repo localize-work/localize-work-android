@@ -17,6 +17,36 @@ internal fun interface BundledStrings {
     fun findIn(locale: String, resourceName: String, count: Long?): String? = null
 }
 
+/**
+ * How an app's `plurals` resource in one language is told from the one in
+ * `values/`, of which only the general (`other`) form can be read.
+ */
+internal object BundledPlurals {
+    /** The whole numbers looked at: enough to meet every form of every language. */
+    private val wholeNumbers: List<Int> = (0..200) + 1_000_000
+
+    /**
+     * The numbers to ask a resource for in the language of [locale]. The
+     * resource is the one in `values/` when it answers any of them with that
+     * one's general form.
+     *
+     * Where the language gives the general form to a whole number, those are
+     * such numbers: the answer is then the resource's own general form. The
+     * first two, in case a device counts one of them differently than CLDR 47
+     * does.
+     *
+     * Russian, Ukrainian, Belarusian and Polish give it to no whole number.
+     * For them it is one number of each form: asked for a form `values/` does
+     * not have, Android answers with the general one. That misses a resource
+     * in `values/` that has every form the language asks for.
+     */
+    fun probes(locale: String): IntArray {
+        val general = wholeNumbers.filter { PluralRules.category(locale, it.toLong()) == PluralRules.OTHER }
+        if (general.isNotEmpty()) return general.take(2).toIntArray()
+        return wholeNumbers.distinctBy { PluralRules.category(locale, it.toLong()) }.toIntArray()
+    }
+}
+
 internal object ResourceNames {
     /** The namespace whose keys the Android export writes without a prefix. */
     private const val UNPREFIXED_NAMESPACE = "strings"

@@ -345,19 +345,28 @@ into the map yourself, where the source text has it:
 `mapOf("count" to n, "first" to a, "second" to b)` together with `count = n`.
 
 The SDK asks for a resource twice. First in the language of `locale`, whatever
-language the app's own resources are set to; Android chooses the folder as it
-does for a device in that language, so `pt-PT` reads `values-pt-rBR` when that
-is the only Portuguese the app has. Android does not say which folder a text
-came from, so a text counts as written in the user's language when it differs
-from the one in `values/`. Two things follow:
+language the app's own resources are set to. Android chooses the folder as it
+does for a device in that language: `pt-BR` reads `values-pt-rBR`, then
+`values-pt`. On Android 7.0 and later it also reads another region's folder
+of the language, so `pt-PT` reads `values-pt-rBR` when that is the only
+Portuguese the app has; older versions do not.
+
+Android does not say which folder a text came from, so a text counts as written
+in the user's language when it differs from the one in `values/`. Three things
+follow:
 
 - Keep `values/` in your fallback language, as the export does. An app whose
   `values/` is itself in the user's language, with another `fallbackLocale`,
   gets its `values/` texts only at the second asking.
-- A `<plurals>` resource is told apart by its general (`other`) form. If
-  `values/` is written in Russian, Ukrainian, Belarusian or Polish with all of
-  that language's forms, a plural the app has not translated can pass for one
-  in another of those four languages.
+- A `<plurals>` resource is told apart by its general (`other`) form alone. A
+  translation whose `other` form reads the same as the one in `values/` is
+  taken for the one in `values/`, whatever its other forms say, and is found
+  only at the second asking.
+- Russian, Ukrainian, Belarusian and Polish use the `other` form for no whole
+  number, so for them the SDK looks for a form `values/` lacks instead. If
+  `values/` has `one`, `few` and `many` forms of its own, as it does when it is
+  written in one of those languages or in Czech, Slovak, Lithuanian or Arabic,
+  a plural the app has not translated passes for one in the user's language.
 
 The second time, after the release's fallback language, the SDK asks the way
 any app does, and gets the language Android picks for your app.

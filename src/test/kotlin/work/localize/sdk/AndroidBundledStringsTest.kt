@@ -36,8 +36,14 @@ class AndroidBundledStringsTest {
     }
 
     @Test
-    fun aRegionReadsTheLanguagesOtherRegion() {
+    fun aRegionReadsItsOwnFolder() {
         assertEquals("Título", bundled.findIn("pt-BR", "bundled_title", null))
+    }
+
+    /** Android reads another region's folder from 7.0 on. What Robolectric does for Android 6 shows nothing of a device. */
+    @Test
+    @Config(sdk = [34])
+    fun aRegionReadsTheLanguagesOtherRegion() {
         assertEquals("Título", bundled.findIn("pt-PT", "bundled_title", null))
     }
 
@@ -65,6 +71,29 @@ class AndroidBundledStringsTest {
         assertNull(bundled.findIn("ru", "bundled_untranslated", 5))
         assertNull(bundled.findIn("et", "bundled_untranslated", 1))
         assertNull(bundled.findIn("ja", "bundled_items", 3))
+    }
+
+    /** Filipino gives the general form to few numbers: 4, 6, 9 and those ending in them. */
+    @Test
+    fun aPluralFromTheDefaultFolderIsToldByANumberTheLanguageCountsAsGeneral() {
+        assertNull(bundled.findIn("fil", "bundled_items", 1))
+        assertNull(bundled.findIn("fil", "bundled_items", 5))
+        assertNull(bundled.findIn("fil", "bundled_items", 4))
+    }
+
+    /** Arabic is laid out the other way, which is not a language of the text. */
+    @Test
+    fun aTextForTheOtherLayoutDirectionIsNotInTheLanguage() {
+        assertNull(bundled.findIn("ar", "bundled_title", null))
+        assertNull(bundled.findIn("he", "bundled_title", null))
+    }
+
+    @Test
+    fun theOtherQualifiersStayTheAppsOwn() {
+        assertEquals("Pealkiri", bundled.findIn("et", "bundled_title", null))
+        RuntimeEnvironment.setQualifiers("+night")
+        assertEquals("Pealkiri (öö)", bundled.findIn("et", "bundled_title", null))
+        assertEquals("Pealkiri (öö)", AndroidBundledStrings(RuntimeEnvironment.getApplication()).findIn("et", "bundled_title", null))
     }
 
     @Test

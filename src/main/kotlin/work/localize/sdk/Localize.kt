@@ -243,9 +243,13 @@ internal class AndroidBundledStrings(context: Context) : BundledStrings {
     /**
      * The app's resources as Android resolves them for one language ([own]),
      * and as it resolves them for a language no app has resources in
-     * ([default]): the ones in `values/`.
+     * ([default]): the ones in `values/`. The two differ in the language and
+     * in nothing else.
+     *
+     * @param probes the whole numbers that show whether a `plurals` resource
+     *   is the one in `values/`
      */
-    private class Language(val locale: String, val own: Resources, val default: Resources)
+    private class Language(val locale: String, val own: Resources, val default: Resources, val probes: IntArray)
 
     /** Those of the locale asked for last, which is the one in use. */
     @Volatile
@@ -296,36 +300,45 @@ internal class AndroidBundledStrings(context: Context) : BundledStrings {
      * The form of a `plurals` resource for [quantity], when the resource is
      * written in the language.
      *
-     * A language that has no resources counts nothing, so [Language.default]
-     * always answers with the general form of the resource in `values/`. The
-     * language asked for chooses among the forms by its own rule. When both
-     * read the same resource, the general form shows up for some number:
-     * straight away in a language that uses it for whole numbers, and in
-     * Russian or Polish, which do not, for a number whose form `values/` does
-     * not have. Only `values/` written with all the forms of such a language
-     * hides it; it is then read as the language asked for.
+     * Both sets of resources are asked for the same number. A language that
+     * has no resources counts nothing, so [Language.default] answers with the
+     * general form of the resource in `values/`. For a number the language
+     * asked for gives the general form to as well, the two answers are the
+     * general forms of the two resources, and the same text means the same
+     * resource. See [BundledPlurals.probes] for a language that has no such
+     * number.
      */
     private fun pluralIn(language: Language, plurals: Int, quantity: Int): String? {
-        val text = language.own.getQuantityText(plurals, quantity).toString()
-        val general = language.default.getQuantityText(plurals, quantity).toString()
-        if (text == general) return null
-        for (probe in PROBES) {
+        for (probe in language.probes) {
+            val general = language.default.getQuantityText(plurals, probe).toString()
             if (language.own.getQuantityText(plurals, probe).toString() == general) return null
         }
-        return text
+        return language.own.getQuantityText(plurals, quantity).toString()
     }
 
     private fun languageOf(locale: String): Language? {
         language?.let { if (it.locale == locale) return it }
         val asked = Locale.forLanguageTag(locale)
         if (asked.language.isEmpty()) return null
-        return Language(locale, resourcesIn(asked), resourcesIn(Locale.forLanguageTag(NO_LANGUAGE))).also { language = it }
+        val none = Locale.forLanguageTag(NO_LANGUAGE)
+        return Language(locale, resourcesIn(asked, asked), resourcesIn(none, asked), BundledPlurals.probes(locale))
+            .also { language = it }
     }
 
-    private fun resourcesIn(locale: Locale): Resources {
-        val configuration = Configuration(resources.configuration)
-        configuration.setLocale(locale)
-        return context.createConfigurationContext(configuration).resources
+    /**
+     * The app's resources for [locale], laid out as for [direction]. Only
+     * those two are set: every other qualifier, such as night mode or the
+     * screen's size, stays the app's own and changes with it. The direction
+     * is set apart from the locale so that both sets of resources read the
+     * same folders but for the language's.
+     */
+    private fun resourcesIn(locale: Locale, direction: Locale): Resources {
+        val override = Configuration()
+        // A new configuration starts with a font scale of 1; 0 leaves the app's.
+        override.fontScale = 0f
+        override.setLocale(locale)
+        override.setLayoutDirection(direction)
+        return context.createConfigurationContext(override).resources
     }
 
     private fun quantity(count: Long): Int = count.coerceIn(Int.MIN_VALUE.toLong(), Int.MAX_VALUE.toLong()).toInt()
@@ -333,8 +346,5 @@ internal class AndroidBundledStrings(context: Context) : BundledStrings {
     private companion object {
         /** ISO 639's code for "no linguistic content": a language no resource folder is named after. */
         const val NO_LANGUAGE = "zxx"
-
-        /** Numbers that between them take every plural form a language has for whole numbers. */
-        val PROBES = intArrayOf(0, 1, 2, 3, 5, 11, 20, 100, 1_000_000)
     }
 }
