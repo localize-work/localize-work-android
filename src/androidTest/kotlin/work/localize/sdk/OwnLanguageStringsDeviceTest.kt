@@ -211,10 +211,16 @@ class OwnLanguageStringsDeviceTest {
         m.assertNone("texts for night mode")
     }
 
-    /** Nor is a text for a wide screen, with the screen really wider than tall. */
+    /**
+     * Nor is a text for a wide screen, with the screen really wider than
+     * tall. A text the app has in the language for a wide screen is the one
+     * found there, also by a reader that was first asked in portrait, and
+     * the portrait one again once the screen is back.
+     */
     @Test
     fun aTextForLandscapeIsNotATranslation() {
         assertNull(bundled.findIn("et", "s_land", null))
+        assertEquals("Püsti", bundled.findIn("et", "s_turn", null))
         val m = Mismatches()
         Device.inLandscape {
             for ((which, reader) in listOf("earlier" to bundled, "new" to AndroidBundledStrings(Device.context))) {
@@ -222,8 +228,13 @@ class OwnLanguageStringsDeviceTest {
                 m.expect("$which reader, et s_land in landscape", null, reader.findIn("et", "s_land", null))
                 m.expect("$which reader, et s_title in landscape", "Pealkiri", reader.findIn("et", "s_title", null))
                 m.expect("$which reader, find s_land in landscape", "Landscape", reader.find("s_land", null))
+                // values-et-land is in the user's language.
+                m.expect("$which reader, et s_turn in landscape", "Pikali", reader.findIn("et", "s_turn", null))
+                m.expect("$which reader, fr s_turn in landscape", null, reader.findIn("fr", "s_turn", null))
             }
         }
+        m.expect("et s_turn after landscape", "Püsti", bundled.findIn("et", "s_turn", null))
+        m.expect("et s_land after landscape", null, bundled.findIn("et", "s_land", null))
         m.assertNone("texts for landscape")
     }
 

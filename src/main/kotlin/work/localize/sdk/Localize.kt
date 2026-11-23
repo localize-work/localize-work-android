@@ -368,6 +368,11 @@ internal class AndroidBundledStrings(context: Context) : BundledStrings {
      * whole, or comparing it with `diff`, makes Android tidy the language
      * list of the object it is given, and on another thread, in the middle
      * of a change of language, that could leave the app with the wrong list.
+     *
+     * The screen's density is left out, and stays the app's own. For an app
+     * Android draws at another scale than the screen's, the density the app
+     * sees is already scaled, and Android scales a density it is given once
+     * more.
      */
     private fun qualifiersOf(app: Configuration): Configuration {
         val own = Configuration()
@@ -380,7 +385,6 @@ internal class AndroidBundledStrings(context: Context) : BundledStrings {
         own.screenWidthDp = app.screenWidthDp
         own.screenHeightDp = app.screenHeightDp
         own.smallestScreenWidthDp = app.smallestScreenWidthDp
-        own.densityDpi = app.densityDpi
         own.touchscreen = app.touchscreen
         own.keyboard = app.keyboard
         own.keyboardHidden = app.keyboardHidden
@@ -402,7 +406,6 @@ internal class AndroidBundledStrings(context: Context) : BundledStrings {
             seen.screenWidthDp == app.screenWidthDp &&
             seen.screenHeightDp == app.screenHeightDp &&
             seen.smallestScreenWidthDp == app.smallestScreenWidthDp &&
-            seen.densityDpi == app.densityDpi &&
             seen.touchscreen == app.touchscreen &&
             seen.keyboard == app.keyboard &&
             seen.keyboardHidden == app.keyboardHidden &&

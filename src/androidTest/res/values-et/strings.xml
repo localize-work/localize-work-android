@@ -20,6 +20,7 @@
     </plurals>
     <string name="p_both_translated">et both string: %1$d</string>
     <string name="s_title">Pealkiri</string>
+    <string name="s_turn">Püsti</string>
     <string name="s_same">OK</string>
     <plurals name="p_same_other">
         <item quantity="one">%1$d minut</item>
