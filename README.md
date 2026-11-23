@@ -349,7 +349,10 @@ language the app's own resources are set to. Android chooses the folder as it
 does for a device in that language: `pt-BR` reads `values-pt-rBR`, then
 `values-pt`. On Android 7.0 and later it also reads another region's folder
 of the language, so `pt-PT` reads `values-pt-rBR` when that is the only
-Portuguese the app has; older versions do not.
+Portuguese the app has, and it keeps the scripts of a language apart. Android
+5 and 6 do neither. They read no other region's folder, and they take a folder
+named for the language, such as `values-zh`, for every way of writing it: a
+`zh-Hant-HK` user is shown its Simplified Chinese text there.
 
 Android does not say which folder a text came from, so a text counts as written
 in the user's language when it differs from the one in `values/`. Three things

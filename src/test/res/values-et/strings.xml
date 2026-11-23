@@ -6,4 +6,5 @@
         <item quantity="one">%1$d asi</item>
         <item quantity="other">%1$d asja</item>
     </plurals>
+    <string name="bundled_both">Arv: %1$d</string>
 </resources>

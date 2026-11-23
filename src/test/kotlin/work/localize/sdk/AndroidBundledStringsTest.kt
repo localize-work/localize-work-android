@@ -82,6 +82,15 @@ class AndroidBundledStringsTest {
     }
 
     /** Arabic is laid out the other way, which is not a language of the text. */
+    /** A name can belong to a `plurals` and a `string` resource at once. */
+    @Test
+    fun aPluralFromTheDefaultFolderLeavesTheNameToAStringInTheLanguage() {
+        assertEquals("Arv: %1\$d", bundled.findIn("et", "bundled_both", 5))
+        assertEquals("Arv: %1\$d", bundled.findIn("et", "bundled_both", null))
+        assertNull(bundled.findIn("fr", "bundled_both", 5))
+        assertEquals("%1\$d things", bundled.find("bundled_both", 5))
+    }
+
     @Test
     fun aTextForTheOtherLayoutDirectionIsNotInTheLanguage() {
         assertNull(bundled.findIn("ar", "bundled_title", null))

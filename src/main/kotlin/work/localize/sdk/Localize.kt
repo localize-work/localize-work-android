@@ -284,7 +284,9 @@ internal class AndroidBundledStrings(context: Context) : BundledStrings {
             val language = languageOf(locale) ?: return null
             if (count != null) {
                 val plurals = resources.getIdentifier(resourceName, "plurals", packageName)
-                if (plurals != 0) return pluralIn(language, plurals, quantity(count))
+                // A `plurals` resource the app has in `values/` alone leaves
+                // the name to a `string` resource it has in the language.
+                if (plurals != 0) pluralIn(language, plurals, quantity(count))?.let { return it }
             }
             val string = resources.getIdentifier(resourceName, "string", packageName)
             if (string == 0) return null
