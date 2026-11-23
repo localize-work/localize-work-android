@@ -273,8 +273,10 @@ internal class AndroidBundledStrings(context: Context) : BundledStrings {
      * Android does not say which language a resource it returns is written
      * in: a text the app lacks in the language asked for comes from `values/`
      * without a word. So a text counts as written in the language of [locale]
-     * when it is another text than the one in `values/`, which every
-     * resource of a built app has.
+     * when it is another text than the one in `values/`. The build drops a
+     * resource that is in a language's folder alone, so `values/` has one;
+     * a resource that is only in a folder with a further qualifier, such as
+     * `values-et-night`, can lack it, and is treated as missing.
      *
      * That leaves out a text that reads the same in both, where nothing is
      * lost, and an app whose `values/` is itself in the user's language.
