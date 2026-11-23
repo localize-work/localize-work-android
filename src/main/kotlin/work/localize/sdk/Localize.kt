@@ -244,12 +244,22 @@ internal class AndroidBundledStrings(context: Context) : BundledStrings {
      * The app's resources as Android resolves them for one language ([own]),
      * and as it resolves them for a language no app has resources in
      * ([default]): the ones in `values/`. The two differ in the language and
-     * in nothing else.
+     * in nothing else, at any moment: both are fixed to the configuration the
+     * app had when they were made ([seen]), and are made anew once the app's
+     * has changed. Two sets that followed the app would not change together,
+     * and a lookup on another thread while the screen turns would compare a
+     * portrait text with a landscape one.
      *
      * @param probes the whole numbers that show whether a `plurals` resource
      *   is the one in `values/`
      */
-    private class Language(val locale: String, val own: Resources, val default: Resources, val probes: IntArray)
+    private class Language(
+        val locale: String,
+        val seen: Configuration,
+        val own: Resources,
+        val default: Resources,
+        val probes: IntArray,
+    )
 
     /** Those of the locale asked for last, which is the one in use. */
     @Volatile
@@ -321,25 +331,29 @@ internal class AndroidBundledStrings(context: Context) : BundledStrings {
     }
 
     private fun languageOf(locale: String): Language? {
-        language?.let { if (it.locale == locale) return it }
+        val current = resources.configuration
+        language?.let { if (it.locale == locale && it.seen.diff(current) == 0) return it }
         val asked = Locale.forLanguageTag(locale)
         if (asked.language.isEmpty()) return null
         val none = Locale.forLanguageTag(NO_LANGUAGE)
-        return Language(locale, resourcesIn(asked, asked), resourcesIn(none, asked), BundledPlurals.probes(locale))
-            .also { language = it }
+        // Copied once: both sets of resources start from the same values,
+        // also when the app's configuration changes while it is read.
+        val seen = Configuration(current)
+        return Language(
+            locale, seen, resourcesIn(asked, asked, seen), resourcesIn(none, asked, seen), BundledPlurals.probes(locale),
+        ).also { language = it }
     }
 
     /**
-     * The app's resources for [locale], laid out as for [direction]. Only
-     * those two are set: every other qualifier, such as night mode or the
-     * screen's size, stays the app's own and changes with it. The direction
-     * is set apart from the locale so that both sets of resources read the
-     * same folders but for the language's.
+     * The app's resources for [locale], laid out as for [direction], with
+     * every other qualifier, such as night mode or the screen's size, as in
+     * [app]. Android keeps what a context like this one names over what the
+     * app changes to later, so naming all of them keeps these resources as
+     * they are. The direction is set apart from the locale so that both sets
+     * of resources read the same folders but for the language's.
      */
-    private fun resourcesIn(locale: Locale, direction: Locale): Resources {
-        val override = Configuration()
-        // A new configuration starts with a font scale of 1; 0 leaves the app's.
-        override.fontScale = 0f
+    private fun resourcesIn(locale: Locale, direction: Locale, app: Configuration): Resources {
+        val override = Configuration(app)
         override.setLocale(locale)
         override.setLayoutDirection(direction)
         return context.createConfigurationContext(override).resources
