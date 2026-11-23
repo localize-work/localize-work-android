@@ -360,9 +360,9 @@ Two things about the folders are Android's own and hold for both askings.
 Hebrew and Indonesian are read from the folders with the old codes,
 `values-iw` and `values-in`; `values-he` and `values-id` are never read, on
 any Android version. And a `<plurals>` resource is counted by the device, not
-by the SDK's rules. Older versions count a few languages differently: on
-Android 11 and older a whole million takes `other`, not `many`, in French,
-Spanish, Italian and Portuguese.
+by the SDK's rules. Older versions count a few languages differently: a whole
+million takes `other`, not `many`, in French on Android 11 and older, and in
+Spanish, Italian and Portuguese on Android 12 and older.
 
 Android does not say which folder a text came from, so a text counts as written
 in the user's language when it differs from the one in `values/`. Three things
