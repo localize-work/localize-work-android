@@ -7,13 +7,25 @@ import org.junit.Test
 class BundledPluralsTest {
     @Test
     fun aLanguageIsAskedForNumbersItCountsAsGeneral() {
-        assertArrayEquals(intArrayOf(0, 2), BundledPlurals.probes("en"))
+        assertArrayEquals(intArrayOf(2, 3), BundledPlurals.probes("en"))
         assertArrayEquals(intArrayOf(2, 3), BundledPlurals.probes("fr"))
         assertArrayEquals(intArrayOf(4, 6), BundledPlurals.probes("fil"))
         assertArrayEquals(intArrayOf(100, 101), BundledPlurals.probes("ar"))
-        assertArrayEquals(intArrayOf(0, 1), BundledPlurals.probes("ja"))
-        assertArrayEquals(intArrayOf(0, 2), BundledPlurals.probes("pt-PT"))
+        assertArrayEquals(intArrayOf(2, 3), BundledPlurals.probes("ja"))
+        assertArrayEquals(intArrayOf(2, 3), BundledPlurals.probes("pt-PT"))
         assertArrayEquals(intArrayOf(2, 3), BundledPlurals.probes("pt-BR"))
+    }
+
+    /** Older Android versions count 0, and in places 1, differently than CLDR 47 does. */
+    @Test
+    fun theNumbersAreOnesEveryAndroidVersionCountsAlike() {
+        // Marathi gave 0 the singular form before, and gives it the general one now.
+        assertEquals(PluralRules.OTHER, PluralRules.category("mr", 0))
+        assertArrayEquals(intArrayOf(2, 3), BundledPlurals.probes("mr"))
+        for (language in PluralRules.coveredLanguages()) {
+            val general = (2..200).any { PluralRules.category(language, it.toLong()) == PluralRules.OTHER }
+            if (general) assertEquals(language, true, BundledPlurals.probes(language).all { it >= 2 })
+        }
     }
 
     @Test

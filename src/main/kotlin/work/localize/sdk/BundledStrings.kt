@@ -31,9 +31,12 @@ internal object BundledPlurals {
      * one's general form.
      *
      * Where the language gives the general form to a whole number, those are
-     * such numbers: the answer is then the resource's own general form. The
-     * first two, in case a device counts one of them differently than CLDR 47
-     * does.
+     * such numbers: the answer is then the resource's own general form. A
+     * device counts by the rules of its Android version, which are older than
+     * CLDR 47 and differ from it mostly at 0 and 1: Marathi gave 0 the
+     * singular form before. So the numbers are taken from 2 up where the
+     * language has them there, and two of them, in case a device still counts
+     * one differently.
      *
      * Russian, Ukrainian, Belarusian and Polish give it to no whole number.
      * For them it is one number of each form: asked for a form `values/` does
@@ -42,7 +45,8 @@ internal object BundledPlurals {
      */
     fun probes(locale: String): IntArray {
         val general = wholeNumbers.filter { PluralRules.category(locale, it.toLong()) == PluralRules.OTHER }
-        if (general.isNotEmpty()) return general.take(2).toIntArray()
+        val steady = general.filter { it >= 2 }.ifEmpty { general }
+        if (steady.isNotEmpty()) return steady.take(2).toIntArray()
         return wholeNumbers.distinctBy { PluralRules.category(locale, it.toLong()) }.toIntArray()
     }
 }
