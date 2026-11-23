@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="s_lang">pt-PT</string>
+    <plurals name="p_items">
+        <item quantity="zero">pt-PT:zero %1$d</item>
+        <item quantity="one">pt-PT:one %1$d</item>
+        <item quantity="two">pt-PT:two %1$d</item>
+        <item quantity="few">pt-PT:few %1$d</item>
+        <item quantity="many">pt-PT:many %1$d</item>
+        <item quantity="other">pt-PT:other %1$d</item>
+    </plurals>
+    <string name="p_string_translated">pt-PT string: %1$d</string>
+    <plurals name="p_both_translated">
+        <item quantity="zero">pt-PT both:zero %1$d</item>
+        <item quantity="one">pt-PT both:one %1$d</item>
+        <item quantity="two">pt-PT both:two %1$d</item>
+        <item quantity="few">pt-PT both:few %1$d</item>
+        <item quantity="many">pt-PT both:many %1$d</item>
+        <item quantity="other">pt-PT both:other %1$d</item>
+    </plurals>
+    <string name="p_both_translated">pt-PT both string: %1$d</string>
+</resources>

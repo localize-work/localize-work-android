@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- English, the fallback language. Texts say which folder and which plural form they are. -->
+    <string name="s_title">Title</string>
+    <string name="s_same">OK</string>
+    <string name="s_default_only">Default only</string>
+    <string name="s_pt_br">Region (default)</string>
+    <string name="s_pt">Language (default)</string>
+    <string name="s_sr_latn">Serbian Latin (default)</string>
+    <string name="s_sr">Serbian (default)</string>
+    <string name="s_zh_tw">Chinese TW (default)</string>
+    <string name="s_zh_hant">Chinese Hant (default)</string>
+    <string name="s_zh">Chinese (default)</string>
+    <string name="s_en_gb">Color</string>
+    <string name="s_night">Day</string>
+    <string name="s_ldrtl">Left to right</string>
+    <string name="s_land">Portrait</string>
+    <string name="s_he_iw">Hebrew iw (default)</string>
+    <string name="s_he_he">Hebrew he (default)</string>
+    <string name="s_id_in">Indonesian in (default)</string>
+    <string name="s_id_id">Indonesian id (default)</string>
+    <string name="s_fil">Filipino fil (default)</string>
+    <string name="s_tl">Filipino tl (default)</string>
+    <string name="s_lang">default</string>
+    <!-- Every form, so a number asked for in any language answers with the name of the form the device gives it. -->
+    <plurals name="p_all_forms">
+        <item quantity="zero">zero</item>
+        <item quantity="one">one</item>
+        <item quantity="two">two</item>
+        <item quantity="few">few</item>
+        <item quantity="many">many</item>
+        <item quantity="other">other</item>
+    </plurals>
+    <!-- Translated in each language folder, with every form. -->
+    <plurals name="p_items">
+        <item quantity="one">en:one %1$d</item>
+        <item quantity="other">en:other %1$d</item>
+    </plurals>
+    <!-- In no language folder. -->
+    <plurals name="p_default_only">
+        <item quantity="one">%1$d file</item>
+        <item quantity="other">%1$d files</item>
+    </plurals>
+    <!-- The plural is here alone; a string of the same name is in every language folder. -->
+    <plurals name="p_string_translated">
+        <item quantity="one">%1$d thing</item>
+        <item quantity="other">%1$d things</item>
+    </plurals>
+    <string name="p_string_translated">Count: %1$d</string>
+    <!-- Both the plural and a string of the same name are in every language folder. -->
+    <plurals name="p_both_translated">
+        <item quantity="one">%1$d box</item>
+        <item quantity="other">%1$d boxes</item>
+    </plurals>
+    <string name="p_both_translated">Boxes: %1$d</string>
+    <!-- Translated in values-et and values-ru with the general form left as it is here. -->
+    <plurals name="p_same_other">
+        <item quantity="one">%1$d min</item>
+        <item quantity="other">%1$d min.</item>
+    </plurals>
+    <!-- What the flow tests read: namespace "translation", keys step1 to step6, cart, hello. -->
+    <string name="translation_step1">Step 1 (bundled default)</string>
+    <string name="translation_step2">Step 2 (bundled default)</string>
+    <string name="translation_step3">Step 3 (bundled default)</string>
+    <string name="translation_step5">Step 5 (bundled default)</string>
+    <plurals name="translation_step4">
+        <item quantity="one">%1$d step 4 (bundled default one)</item>
+        <item quantity="other">%1$d steps 4 (bundled default other)</item>
+    </plurals>
+    <plurals name="translation_cart">
+        <item quantity="one">%1$d product, %2$s</item>
+        <item quantity="other">%1$d products, %2$s</item>
+    </plurals>
+    <string name="translation_hello">Hello, %1$s! (bundled default)</string>
+</resources>

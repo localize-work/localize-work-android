@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="s_lang">cy</string>
+    <plurals name="p_items">
+        <item quantity="zero">cy:zero %1$d</item>
+        <item quantity="one">cy:one %1$d</item>
+        <item quantity="two">cy:two %1$d</item>
+        <item quantity="few">cy:few %1$d</item>
+        <item quantity="many">cy:many %1$d</item>
+        <item quantity="other">cy:other %1$d</item>
+    </plurals>
+    <string name="p_string_translated">cy string: %1$d</string>
+    <plurals name="p_both_translated">
+        <item quantity="zero">cy both:zero %1$d</item>
+        <item quantity="one">cy both:one %1$d</item>
+        <item quantity="two">cy both:two %1$d</item>
+        <item quantity="few">cy both:few %1$d</item>
+        <item quantity="many">cy both:many %1$d</item>
+        <item quantity="other">cy both:other %1$d</item>
+    </plurals>
+    <string name="p_both_translated">cy both string: %1$d</string>
+</resources>

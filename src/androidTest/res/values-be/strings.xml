@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="s_lang">be</string>
+    <plurals name="p_items">
+        <item quantity="zero">be:zero %1$d</item>
+        <item quantity="one">be:one %1$d</item>
+        <item quantity="two">be:two %1$d</item>
+        <item quantity="few">be:few %1$d</item>
+        <item quantity="many">be:many %1$d</item>
+        <item quantity="other">be:other %1$d</item>
+    </plurals>
+    <string name="p_string_translated">be string: %1$d</string>
+    <plurals name="p_both_translated">
+        <item quantity="zero">be both:zero %1$d</item>
+        <item quantity="one">be both:one %1$d</item>
+        <item quantity="two">be both:two %1$d</item>
+        <item quantity="few">be both:few %1$d</item>
+        <item quantity="many">be both:many %1$d</item>
+        <item quantity="other">be both:other %1$d</item>
+    </plurals>
+    <string name="p_both_translated">be both string: %1$d</string>
+</resources>

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- The test app. Plain HTTP is allowed to this device alone, for the
+         server the tests run; right-to-left layouts are on, as in a new app. -->
+    <application
+        android:networkSecurityConfig="@xml/network_security_config"
+        android:supportsRtl="true" />
+
+</manifest>

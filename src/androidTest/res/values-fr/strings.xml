@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="s_lang">fr</string>
+    <plurals name="p_items">
+        <item quantity="zero">fr:zero %1$d</item>
+        <item quantity="one">fr:one %1$d</item>
+        <item quantity="two">fr:two %1$d</item>
+        <item quantity="few">fr:few %1$d</item>
+        <item quantity="many">fr:many %1$d</item>
+        <item quantity="other">fr:other %1$d</item>
+    </plurals>
+    <string name="p_string_translated">fr string: %1$d</string>
+    <plurals name="p_both_translated">
+        <item quantity="zero">fr both:zero %1$d</item>
+        <item quantity="one">fr both:one %1$d</item>
+        <item quantity="two">fr both:two %1$d</item>
+        <item quantity="few">fr both:few %1$d</item>
+        <item quantity="many">fr both:many %1$d</item>
+        <item quantity="other">fr both:other %1$d</item>
+    </plurals>
+    <string name="p_both_translated">fr both string: %1$d</string>
+</resources>

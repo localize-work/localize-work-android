@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="s_lang">et</string>
+    <plurals name="p_items">
+        <item quantity="zero">et:zero %1$d</item>
+        <item quantity="one">et:one %1$d</item>
+        <item quantity="two">et:two %1$d</item>
+        <item quantity="few">et:few %1$d</item>
+        <item quantity="many">et:many %1$d</item>
+        <item quantity="other">et:other %1$d</item>
+    </plurals>
+    <string name="p_string_translated">et string: %1$d</string>
+    <plurals name="p_both_translated">
+        <item quantity="zero">et both:zero %1$d</item>
+        <item quantity="one">et both:one %1$d</item>
+        <item quantity="two">et both:two %1$d</item>
+        <item quantity="few">et both:few %1$d</item>
+        <item quantity="many">et both:many %1$d</item>
+        <item quantity="other">et both:other %1$d</item>
+    </plurals>
+    <string name="p_both_translated">et both string: %1$d</string>
+    <string name="s_title">Pealkiri</string>
+    <string name="s_same">OK</string>
+    <plurals name="p_same_other">
+        <item quantity="one">%1$d minut</item>
+        <item quantity="other">%1$d min.</item>
+    </plurals>
+    <string name="translation_step1">Samm 1 (bundled et)</string>
+    <string name="translation_step2">Samm 2 (bundled et)</string>
+    <plurals name="translation_cart">
+        <item quantity="one">%1$d toode, %2$s</item>
+        <item quantity="other">%1$d toodet, %2$s</item>
+    </plurals>
+</resources>

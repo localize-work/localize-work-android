@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="s_lang">ro</string>
+    <plurals name="p_items">
+        <item quantity="zero">ro:zero %1$d</item>
+        <item quantity="one">ro:one %1$d</item>
+        <item quantity="two">ro:two %1$d</item>
+        <item quantity="few">ro:few %1$d</item>
+        <item quantity="many">ro:many %1$d</item>
+        <item quantity="other">ro:other %1$d</item>
+    </plurals>
+    <string name="p_string_translated">ro string: %1$d</string>
+    <plurals name="p_both_translated">
+        <item quantity="zero">ro both:zero %1$d</item>
+        <item quantity="one">ro both:one %1$d</item>
+        <item quantity="two">ro both:two %1$d</item>
+        <item quantity="few">ro both:few %1$d</item>
+        <item quantity="many">ro both:many %1$d</item>
+        <item quantity="other">ro both:other %1$d</item>
+    </plurals>
+    <string name="p_both_translated">ro both string: %1$d</string>
+</resources>

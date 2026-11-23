@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="s_lang">ar</string>
+    <plurals name="p_items">
+        <item quantity="zero">ar:zero %1$d</item>
+        <item quantity="one">ar:one %1$d</item>
+        <item quantity="two">ar:two %1$d</item>
+        <item quantity="few">ar:few %1$d</item>
+        <item quantity="many">ar:many %1$d</item>
+        <item quantity="other">ar:other %1$d</item>
+    </plurals>
+    <string name="p_string_translated">ar string: %1$d</string>
+    <plurals name="p_both_translated">
+        <item quantity="zero">ar both:zero %1$d</item>
+        <item quantity="one">ar both:one %1$d</item>
+        <item quantity="two">ar both:two %1$d</item>
+        <item quantity="few">ar both:few %1$d</item>
+        <item quantity="many">ar both:many %1$d</item>
+        <item quantity="other">ar both:other %1$d</item>
+    </plurals>
+    <string name="p_both_translated">ar both string: %1$d</string>
+</resources>

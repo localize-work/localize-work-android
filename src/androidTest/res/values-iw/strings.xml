@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="s_lang">he</string>
+    <plurals name="p_items">
+        <item quantity="zero">he:zero %1$d</item>
+        <item quantity="one">he:one %1$d</item>
+        <item quantity="two">he:two %1$d</item>
+        <item quantity="few">he:few %1$d</item>
+        <item quantity="many">he:many %1$d</item>
+        <item quantity="other">he:other %1$d</item>
+    </plurals>
+    <string name="p_string_translated">he string: %1$d</string>
+    <plurals name="p_both_translated">
+        <item quantity="zero">he both:zero %1$d</item>
+        <item quantity="one">he both:one %1$d</item>
+        <item quantity="two">he both:two %1$d</item>
+        <item quantity="few">he both:few %1$d</item>
+        <item quantity="many">he both:many %1$d</item>
+        <item quantity="other">he both:other %1$d</item>
+    </plurals>
+    <string name="p_both_translated">he both string: %1$d</string>
+    <string name="s_he_iw">עברית (iw)</string>
+</resources>

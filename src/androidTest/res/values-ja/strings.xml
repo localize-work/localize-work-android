@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="s_lang">ja</string>
+    <plurals name="p_items">
+        <item quantity="zero">ja:zero %1$d</item>
+        <item quantity="one">ja:one %1$d</item>
+        <item quantity="two">ja:two %1$d</item>
+        <item quantity="few">ja:few %1$d</item>
+        <item quantity="many">ja:many %1$d</item>
+        <item quantity="other">ja:other %1$d</item>
+    </plurals>
+    <string name="p_string_translated">ja string: %1$d</string>
+    <plurals name="p_both_translated">
+        <item quantity="zero">ja both:zero %1$d</item>
+        <item quantity="one">ja both:one %1$d</item>
+        <item quantity="two">ja both:two %1$d</item>
+        <item quantity="few">ja both:few %1$d</item>
+        <item quantity="many">ja both:many %1$d</item>
+        <item quantity="other">ja both:other %1$d</item>
+    </plurals>
+    <string name="p_both_translated">ja both string: %1$d</string>
+</resources>

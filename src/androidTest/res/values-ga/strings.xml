@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="s_lang">ga</string>
+    <plurals name="p_items">
+        <item quantity="zero">ga:zero %1$d</item>
+        <item quantity="one">ga:one %1$d</item>
+        <item quantity="two">ga:two %1$d</item>
+        <item quantity="few">ga:few %1$d</item>
+        <item quantity="many">ga:many %1$d</item>
+        <item quantity="other">ga:other %1$d</item>
+    </plurals>
+    <string name="p_string_translated">ga string: %1$d</string>
+    <plurals name="p_both_translated">
+        <item quantity="zero">ga both:zero %1$d</item>
+        <item quantity="one">ga both:one %1$d</item>
+        <item quantity="two">ga both:two %1$d</item>
+        <item quantity="few">ga both:few %1$d</item>
+        <item quantity="many">ga both:many %1$d</item>
+        <item quantity="other">ga both:other %1$d</item>
+    </plurals>
+    <string name="p_both_translated">ga both string: %1$d</string>
+</resources>

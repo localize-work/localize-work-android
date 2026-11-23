@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="s_lang">fil</string>
+    <plurals name="p_items">
+        <item quantity="zero">fil:zero %1$d</item>
+        <item quantity="one">fil:one %1$d</item>
+        <item quantity="two">fil:two %1$d</item>
+        <item quantity="few">fil:few %1$d</item>
+        <item quantity="many">fil:many %1$d</item>
+        <item quantity="other">fil:other %1$d</item>
+    </plurals>
+    <string name="p_string_translated">fil string: %1$d</string>
+    <plurals name="p_both_translated">
+        <item quantity="zero">fil both:zero %1$d</item>
+        <item quantity="one">fil both:one %1$d</item>
+        <item quantity="two">fil both:two %1$d</item>
+        <item quantity="few">fil both:few %1$d</item>
+        <item quantity="many">fil both:many %1$d</item>
+        <item quantity="other">fil both:other %1$d</item>
+    </plurals>
+    <string name="p_both_translated">fil both string: %1$d</string>
+    <string name="s_fil">Filipino (fil)</string>
+</resources>

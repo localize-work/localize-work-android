@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="s_lang">lv</string>
+    <plurals name="p_items">
+        <item quantity="zero">lv:zero %1$d</item>
+        <item quantity="one">lv:one %1$d</item>
+        <item quantity="two">lv:two %1$d</item>
+        <item quantity="few">lv:few %1$d</item>
+        <item quantity="many">lv:many %1$d</item>
+        <item quantity="other">lv:other %1$d</item>
+    </plurals>
+    <string name="p_string_translated">lv string: %1$d</string>
+    <plurals name="p_both_translated">
+        <item quantity="zero">lv both:zero %1$d</item>
+        <item quantity="one">lv both:one %1$d</item>
+        <item quantity="two">lv both:two %1$d</item>
+        <item quantity="few">lv both:few %1$d</item>
+        <item quantity="many">lv both:many %1$d</item>
+        <item quantity="other">lv both:other %1$d</item>
+    </plurals>
+    <string name="p_both_translated">lv both string: %1$d</string>
+</resources>

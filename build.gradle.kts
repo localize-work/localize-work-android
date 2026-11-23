@@ -22,6 +22,8 @@ android {
         aarMetadata {
             minCompileSdk = 21
         }
+        // For the tests in src/androidTest, which run on a device or emulator.
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     compileOptions {
@@ -32,6 +34,8 @@ android {
     testOptions {
         // The tests of the resource reader need the test resources in src/test/res.
         unitTests.isIncludeAndroidResources = true
+        // The test app of src/androidTest only; the library itself names no target.
+        targetSdk = 36
     }
 
     publishing {
@@ -55,6 +59,11 @@ kotlin {
 dependencies {
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.robolectric:robolectric:4.16.1")
+
+    androidTestImplementation("junit:junit:4.13.2")
+    androidTestImplementation("androidx.test:runner:1.6.2")
+    androidTestImplementation("androidx.test:core:1.6.1")
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
 }
 
 publishing {

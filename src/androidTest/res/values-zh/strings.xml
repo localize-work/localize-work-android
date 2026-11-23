@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="s_lang">zh</string>
+    <plurals name="p_items">
+        <item quantity="zero">zh:zero %1$d</item>
+        <item quantity="one">zh:one %1$d</item>
+        <item quantity="two">zh:two %1$d</item>
+        <item quantity="few">zh:few %1$d</item>
+        <item quantity="many">zh:many %1$d</item>
+        <item quantity="other">zh:other %1$d</item>
+    </plurals>
+    <string name="p_string_translated">zh string: %1$d</string>
+    <plurals name="p_both_translated">
+        <item quantity="zero">zh both:zero %1$d</item>
+        <item quantity="one">zh both:one %1$d</item>
+        <item quantity="two">zh both:two %1$d</item>
+        <item quantity="few">zh both:few %1$d</item>
+        <item quantity="many">zh both:many %1$d</item>
+        <item quantity="other">zh both:other %1$d</item>
+    </plurals>
+    <string name="p_both_translated">zh both string: %1$d</string>
+    <string name="s_zh">简体 (zh)</string>
+</resources>

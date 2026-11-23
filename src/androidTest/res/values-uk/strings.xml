@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="s_lang">uk</string>
+    <plurals name="p_items">
+        <item quantity="zero">uk:zero %1$d</item>
+        <item quantity="one">uk:one %1$d</item>
+        <item quantity="two">uk:two %1$d</item>
+        <item quantity="few">uk:few %1$d</item>
+        <item quantity="many">uk:many %1$d</item>
+        <item quantity="other">uk:other %1$d</item>
+    </plurals>
+    <string name="p_string_translated">uk string: %1$d</string>
+    <plurals name="p_both_translated">
+        <item quantity="zero">uk both:zero %1$d</item>
+        <item quantity="one">uk both:one %1$d</item>
+        <item quantity="two">uk both:two %1$d</item>
+        <item quantity="few">uk both:few %1$d</item>
+        <item quantity="many">uk both:many %1$d</item>
+        <item quantity="other">uk both:other %1$d</item>
+    </plurals>
+    <string name="p_both_translated">uk both string: %1$d</string>
+</resources>
