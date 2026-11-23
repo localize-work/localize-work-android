@@ -28,4 +28,5 @@ The first release.
 - A listener reports when texts change; `setLocale` switches the locale while
   the app runs.
 - No dependencies beyond the Kotlin standard library. Requires Android 5.0
-  (API level 21).
+  (API level 21); downloads from the default CDN need Android 7.1.1 (API
+  level 25), whose certificate older versions do not accept.

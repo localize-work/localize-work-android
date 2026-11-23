@@ -5,6 +5,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
@@ -16,6 +17,11 @@ class CacheTest {
     val folder = TemporaryFolder()
 
     private fun projectFolder() = File(folder.root, SLUG)
+
+    private companion object {
+        /** Why a case is skipped where files cannot be made unreadable, as on Windows. */
+        const val CANNOT_REFUSE = "this file system cannot take the permission away"
+    }
 
     private fun offline(h: Harness) {
         h.transport.unreachable(POINTER_URL)
@@ -466,7 +472,7 @@ class CacheTest {
         val nextLaunch: LocalizeConfig.Builder.() -> Unit = { updatePolicy(UpdatePolicy.NEXT_LAUNCH) }
         h.launchWith("en" to """{ "title": "one" }""")
         val state = File(projectFolder(), ReleaseStore.STATE_FILE)
-        assertTrue(state.setReadable(false))
+        assumeTrue(CANNOT_REFUSE, state.setReadable(false))
         offline(h)
 
         val locked = h.launch(configure = nextLaunch)
@@ -492,7 +498,7 @@ class CacheTest {
         val nextLaunch: LocalizeConfig.Builder.() -> Unit = { updatePolicy(UpdatePolicy.NEXT_LAUNCH) }
         h.launchWith("en" to """{ "title": "one" }""")
         val state = File(projectFolder(), ReleaseStore.STATE_FILE)
-        assertTrue(state.setReadable(false))
+        assumeTrue(CANNOT_REFUSE, state.setReadable(false))
         val client = h.launch(configure = nextLaunch)
         assertNull(client.version)
 
@@ -523,7 +529,7 @@ class CacheTest {
         val h = Harness(folder.root)
         val nextLaunch: LocalizeConfig.Builder.() -> Unit = { updatePolicy(UpdatePolicy.NEXT_LAUNCH) }
         h.launchWith("en" to """{ "title": "one" }""")
-        assertTrue(File(projectFolder(), ReleaseStore.STATE_FILE).setReadable(false))
+        assumeTrue(CANNOT_REFUSE, File(projectFolder(), ReleaseStore.STATE_FILE).setReadable(false))
         val client = h.launch(configure = nextLaunch)
         h.transport.pointer("v2")
         h.transport.file("v2", "en", """{ "title": "two" }""")
@@ -554,7 +560,7 @@ class CacheTest {
             val h = Harness(root)
             h.launchWith("en" to """{ "title": "one" }""")
             val state = File(File(root, SLUG), ReleaseStore.STATE_FILE)
-            assertTrue(state.setReadable(false))
+            assumeTrue(CANNOT_REFUSE, state.setReadable(false))
             val client = h.launch { updatePolicy(policy) }
             assertEquals("title", client.text("title"))
 
@@ -582,7 +588,7 @@ class CacheTest {
             h.launchWith("en" to """{ "title": "one" }""")
             offline(h)
             val shut = if (closed == "the cache folder") root else File(root, SLUG)
-            assertTrue(shut.setExecutable(false))
+            assumeTrue(CANNOT_REFUSE, shut.setExecutable(false))
             val locked = try {
                 h.launch(configure = nextLaunch).also { assertNull(closed, it.version) }
             } finally {
@@ -720,7 +726,7 @@ class CacheTest {
         h.launchWith("en" to """{ "title": "one" }""")
         h.transport.file("v1", "fr", """{ "title": "un" }""")
         val client = h.launch(configure = french)
-        assertTrue(projectFolder().setWritable(false))
+        assumeTrue(CANNOT_REFUSE, projectFolder().setWritable(false))
         try {
             client.setLocale("fr", null)
             assertEquals("un", client.text("title"))
@@ -760,7 +766,7 @@ class CacheTest {
         h.launchWith("en" to """{ "title": "one" }""")
         val client = h.launch(configure = french)
         assertNull(client.version)
-        assertTrue(projectFolder().setWritable(false))
+        assumeTrue(CANNOT_REFUSE, projectFolder().setWritable(false))
         try {
             assertEquals(Status.APPLIED, client.refreshNow().status)
             assertEquals("v1", client.version)
