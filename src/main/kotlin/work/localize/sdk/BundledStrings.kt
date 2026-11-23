@@ -4,10 +4,17 @@ package work.localize.sdk
 internal fun interface BundledStrings {
     /**
      * The raw text of the resource called [resourceName], or `null` when the
-     * app has none. With a [count], a `plurals` resource of that name is
-     * preferred over a `string` resource.
+     * app has none, in the language Android picks for the app. With a
+     * [count], a `plurals` resource of that name is preferred over a `string`
+     * resource.
      */
     fun find(resourceName: String, count: Long?): String?
+
+    /**
+     * The same, but only a text the app has in the language of [locale]:
+     * `null` when the app has the resource in other languages alone.
+     */
+    fun findIn(locale: String, resourceName: String, count: Long?): String? = null
 }
 
 internal object ResourceNames {

@@ -1,6 +1,8 @@
 package work.localize.sdk
 
 import android.content.Context
+import android.content.res.Configuration
+import android.content.res.Resources
 import android.os.Build
 import android.os.Handler
 import android.os.LocaleList
@@ -96,10 +98,12 @@ public object Localize {
     /**
      * The text for [key].
      *
-     * The key is looked up in the locale, then in its base language (`en` for
-     * `en-FI`), then in the fallback locale. A text found nowhere comes from
-     * the app's string resource of the matching name, then from [fallback],
-     * and failing all of those the key itself is returned.
+     * The user's language comes first: the key is looked up in the locale,
+     * then in its base language (`en` for `en-FI`), then in the app's string
+     * resource of the matching name when the app has it in that language.
+     * After that come the fallback locale, the app's string resource in
+     * whatever language Android picks for the app, [fallback], and failing
+     * all of those the key itself.
      *
      * @param args values for `{{name}}` placeholders
      * @param count selects the plural form (`key_one`, `key_other`, …) and fills `{{count}}`
@@ -232,17 +236,26 @@ public object Localize {
 
 /** Reads `string` and `plurals` resources of the app by name. */
 internal class AndroidBundledStrings(context: Context) : BundledStrings {
-    private val resources = context.resources
-    private val packageName = context.packageName
+    private val context = context.applicationContext ?: context
+    private val resources = this.context.resources
+    private val packageName = this.context.packageName
+
+    /**
+     * The app's resources as Android resolves them for one language ([own]),
+     * and as it resolves them for a language no app has resources in
+     * ([default]): the ones in `values/`.
+     */
+    private class Language(val locale: String, val own: Resources, val default: Resources)
+
+    /** Those of the locale asked for last, which is the one in use. */
+    @Volatile
+    private var language: Language? = null
 
     override fun find(resourceName: String, count: Long?): String? {
         try {
             if (count != null) {
                 val plurals = resources.getIdentifier(resourceName, "plurals", packageName)
-                if (plurals != 0) {
-                    val quantity = count.coerceIn(Int.MIN_VALUE.toLong(), Int.MAX_VALUE.toLong()).toInt()
-                    return resources.getQuantityText(plurals, quantity).toString()
-                }
+                if (plurals != 0) return resources.getQuantityText(plurals, quantity(count)).toString()
             }
             val string = resources.getIdentifier(resourceName, "string", packageName)
             if (string != 0) return resources.getText(string).toString()
@@ -250,5 +263,78 @@ internal class AndroidBundledStrings(context: Context) : BundledStrings {
             // A resource that cannot be read is treated as missing.
         }
         return null
+    }
+
+    /**
+     * Android does not say which language a resource it returns is written
+     * in: a text the app lacks in the language asked for comes from `values/`
+     * without a word. So a text counts as written in the language of [locale]
+     * when it is another text than the one in `values/`, which every
+     * resource of a built app has.
+     *
+     * That leaves out a text that reads the same in both, where nothing is
+     * lost, and an app whose `values/` is itself in the user's language.
+     */
+    override fun findIn(locale: String, resourceName: String, count: Long?): String? {
+        try {
+            val language = languageOf(locale) ?: return null
+            if (count != null) {
+                val plurals = resources.getIdentifier(resourceName, "plurals", packageName)
+                if (plurals != 0) return pluralIn(language, plurals, quantity(count))
+            }
+            val string = resources.getIdentifier(resourceName, "string", packageName)
+            if (string == 0) return null
+            val text = language.own.getText(string).toString()
+            return text.takeIf { it != language.default.getText(string).toString() }
+        } catch (failure: RuntimeException) {
+            // A resource that cannot be read is treated as missing.
+            return null
+        }
+    }
+
+    /**
+     * The form of a `plurals` resource for [quantity], when the resource is
+     * written in the language.
+     *
+     * A language that has no resources counts nothing, so [Language.default]
+     * always answers with the general form of the resource in `values/`. The
+     * language asked for chooses among the forms by its own rule. When both
+     * read the same resource, the general form shows up for some number:
+     * straight away in a language that uses it for whole numbers, and in
+     * Russian or Polish, which do not, for a number whose form `values/` does
+     * not have. Only `values/` written with all the forms of such a language
+     * hides it; it is then read as the language asked for.
+     */
+    private fun pluralIn(language: Language, plurals: Int, quantity: Int): String? {
+        val text = language.own.getQuantityText(plurals, quantity).toString()
+        val general = language.default.getQuantityText(plurals, quantity).toString()
+        if (text == general) return null
+        for (probe in PROBES) {
+            if (language.own.getQuantityText(plurals, probe).toString() == general) return null
+        }
+        return text
+    }
+
+    private fun languageOf(locale: String): Language? {
+        language?.let { if (it.locale == locale) return it }
+        val asked = Locale.forLanguageTag(locale)
+        if (asked.language.isEmpty()) return null
+        return Language(locale, resourcesIn(asked), resourcesIn(Locale.forLanguageTag(NO_LANGUAGE))).also { language = it }
+    }
+
+    private fun resourcesIn(locale: Locale): Resources {
+        val configuration = Configuration(resources.configuration)
+        configuration.setLocale(locale)
+        return context.createConfigurationContext(configuration).resources
+    }
+
+    private fun quantity(count: Long): Int = count.coerceIn(Int.MIN_VALUE.toLong(), Int.MAX_VALUE.toLong()).toInt()
+
+    private companion object {
+        /** ISO 639's code for "no linguistic content": a language no resource folder is named after. */
+        const val NO_LANGUAGE = "zxx"
+
+        /** Numbers that between them take every plural form a language has for whole numbers. */
+        val PROBES = intArrayOf(0, 1, 2, 3, 5, 11, 20, 100, 1_000_000)
     }
 }

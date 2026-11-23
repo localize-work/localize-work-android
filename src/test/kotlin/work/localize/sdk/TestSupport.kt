@@ -54,6 +54,9 @@ internal class Harness(private val cacheRoot: File, val transport: FakeTransport
     val bundledResources = ConcurrentHashMap<String, String>()
     val bundledPlurals = ConcurrentHashMap<String, String>()
 
+    /** The resources the app has in a language of its own: locale, then resource name, to text. */
+    val bundledIn = ConcurrentHashMap<String, MutableMap<String, String>>()
+
     private val direct = Executor { task -> task.run() }
 
     /**
@@ -89,8 +92,12 @@ internal class Harness(private val cacheRoot: File, val transport: FakeTransport
             cacheRoot = root,
             deviceLocale = deviceLocale,
             transport = transport,
-            bundled = { name, count ->
-                (if (count != null) bundledPlurals[name] else null) ?: bundledResources[name]
+            bundled = object : BundledStrings {
+                override fun find(resourceName: String, count: Long?): String? =
+                    (if (count != null) bundledPlurals[resourceName] else null) ?: bundledResources[resourceName]
+
+                override fun findIn(locale: String, resourceName: String, count: Long?): String? =
+                    bundledIn[locale]?.get(resourceName)
             },
             worker = direct,
             callbacks = direct,

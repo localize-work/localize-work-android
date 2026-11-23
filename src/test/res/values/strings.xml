@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="bundled_title">Title</string>
+    <string name="bundled_same">OK</string>
+    <string name="bundled_default_only">Default only</string>
+    <plurals name="bundled_items">
+        <item quantity="one">%1$d item</item>
+        <item quantity="other">%1$d items</item>
+    </plurals>
+    <plurals name="bundled_untranslated">
+        <item quantity="one">%1$d file</item>
+        <item quantity="other">%1$d files</item>
+    </plurals>
+</resources>

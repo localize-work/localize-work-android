@@ -41,7 +41,10 @@ internal class LocalizeClient(
      *   and until it is whole the app's bundled strings, which are in the
      *   user's language, are the better text
      */
-    private class Snapshot(val locale: String, val chain: List<String>, val release: Release?, val usable: Release?)
+    private class Snapshot(val locale: String, val chain: List<String>, val release: Release?, val usable: Release?) {
+        /** How many of [chain], from its start, are [locale] and its shorter forms; the rest are the fallback locale's. */
+        val own: Int = LocaleTags.chain(locale, null).size
+    }
 
     private fun snapshotOf(locale: String, chain: List<String>, release: Release?) =
         Snapshot(locale, chain, release, release?.takeIf { it.hasAll(chain, config.namespaces) })
@@ -108,31 +111,52 @@ internal class LocalizeClient(
         val current = snapshot
         val resolvedNamespace = namespace ?: config.defaultNamespace
         val release = current.usable
+        val resourceName = ResourceNames.forKey(resolvedNamespace, key)
+        // The user's own language first, wherever it is written: a text in it
+        // that the app shipped with says more to them than a newer one in
+        // another language.
         if (release != null) {
-            for (locale in current.chain) {
-                val tree = release.tree(locale, resolvedNamespace) ?: continue
-                val text = ResourceLookup.find(tree, key, count, locale)
-                if (text != null) return Interpolator.interpolate(text, args, count)
-            }
-            // No locale has the form the count asks for, nor the plain key.
+            val text = release.find(current.chain.subList(0, current.own), resolvedNamespace, key, count)
+            if (text != null) return Interpolator.interpolate(text, args, count)
+        }
+        val own = bundledText { bundled.findIn(current.locale, resourceName, count) }
+        if (own != null) return BundledText.format(own, args, count)
+        if (release != null) {
+            val text = release.find(current.chain.subList(current.own, current.chain.size), resolvedNamespace, key, count)
+            if (text != null) return Interpolator.interpolate(text, args, count)
+            // Nothing has the form the count asks for, nor the plain key.
             // Before giving up on the release, take a language's general form.
             if (count != null) {
                 for (locale in current.chain) {
                     val tree = release.tree(locale, resolvedNamespace) ?: continue
-                    val text = ResourceLookup.findOther(tree, key)
-                    if (text != null) return Interpolator.interpolate(text, args, count)
+                    val general = ResourceLookup.findOther(tree, key)
+                    if (general != null) return Interpolator.interpolate(general, args, count)
                 }
             }
         }
-        val resource = try {
-            bundled.find(ResourceNames.forKey(resolvedNamespace, key), count)
-        } catch (failure: RuntimeException) {
-            null
-        }
+        // What Android picks for the app, which may be a third language.
+        val resource = bundledText { bundled.find(resourceName, count) }
         if (resource != null) return BundledText.format(resource, args, count)
         if (fallback != null) return Interpolator.interpolate(fallback, args, count)
         return key
     }
+
+    /** The text [locales] have for [key] in this release, tried in order: the plain key, or with a [count] its form. */
+    private fun Release.find(locales: List<String>, namespace: String, key: String, count: Long?): String? {
+        for (locale in locales) {
+            val tree = tree(locale, namespace) ?: continue
+            ResourceLookup.find(tree, key, count, locale)?.let { return it }
+        }
+        return null
+    }
+
+    /** A resource that cannot be read is treated as missing. */
+    private inline fun bundledText(read: () -> String?): String? =
+        try {
+            read()
+        } catch (failure: RuntimeException) {
+            null
+        }
 
     /**
      * Switches the locale. When the release the app holds already has every
@@ -408,12 +432,12 @@ internal class LocalizeClient(
      *
      * Nothing has named this release as the published one. If it answers "not
      * found" for the locale asked for, it may be gone from the CDN, or have
-     * nothing in that language, and reading it with empty files would show
-     * its fallback language in place of the app's bundled strings. So when a
-     * file of the locale asked for or of its shorter forms is missing, the
-     * release must have shown that it has the language: one of those files
-     * was found now, or it already has texts in one of them
-     * ([hasTextsIn]). A file of the fallback locale shows nothing of the kind.
+     * nothing in that language, and a release that may be gone is not put in
+     * use to show its fallback language. So when a file of the locale asked
+     * for or of its shorter forms is missing, the release must have shown
+     * that it has the language: one of those files was found now, or it
+     * already has texts in one of them ([hasTextsIn]). A file of the
+     * fallback locale shows nothing of the kind.
      * With that shown, a file it does not have is an empty one, as for a
      * regional locale without overrides of its own or a namespace the
      * language has no texts in.

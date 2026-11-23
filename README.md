@@ -251,7 +251,8 @@ With a `count`, the SDK looks in each file for, in this order:
 That is i18next's order. A file that has none of them leaves the key to the
 next locale, so a regional locale that overrides only `items_other` still gets
 `items_one` from its base language. Only when no locale has the form or the
-plain key is a locale's `key_other` used, as a last resort.
+plain key, and the app has no resource for the key in the user's language, is
+a locale's `key_other` used, as a last resort.
 
 The category comes from the language of the file being read, so a Russian text
 uses Russian rules and an English fallback uses English rules.
@@ -297,13 +298,23 @@ with, because a project's files hold the forms that release names.
 Values are inserted as they are. There is no HTML escaping, and `$t(…)` nesting
 is not expanded.
 
-### 5. When no file has the text
+### 5. Where a text comes from
 
-The SDK then returns, in this order:
+The user's language comes first, wherever the text is. In order:
 
-1. **Your app's own string resource**, if it has one of the matching name.
-2. The `fallback` you passed to the call.
-3. The key itself.
+1. The release, in `locale` and its shorter forms (`en-FI`, then `en`).
+2. **Your app's own string resource**, when the app has it in that language
+   (see below).
+3. The release, in `fallbackLocale` and its shorter forms.
+4. Your app's own string resource, in whatever language Android picks for the
+   app.
+5. The `fallback` you passed to the call.
+6. The key itself.
+
+So a user whose language the release lacks a text in sees the text your app
+shipped with in their language, not a newer one in the fallback language. If
+the app does not bundle their language, step 2 finds nothing and the fallback
+language of the release is shown.
 
 The resource name is the one localize.work's Android export writes: the
 namespace and the key joined by `_`, with every character other than a letter,
@@ -333,10 +344,23 @@ does not say which position is the count's. For a key like that, put the count
 into the map yourself, where the source text has it:
 `mapOf("count" to n, "first" to a, "second" to b)` together with `count = n`.
 
-Bundled strings come in the language Android picks for your app. If you set
-`locale` yourself, or call `Localize.setLocale`, on a system where that does
-not change the app's own resources, the bundled fallback can be in another
-language than the downloaded texts.
+The SDK asks for a resource twice. First in the language of `locale`, whatever
+language the app's own resources are set to; Android chooses the folder as it
+does for a device in that language, so `pt-PT` reads `values-pt-rBR` when that
+is the only Portuguese the app has. Android does not say which folder a text
+came from, so a text counts as written in the user's language when it differs
+from the one in `values/`. Two things follow:
+
+- Keep `values/` in your fallback language, as the export does. An app whose
+  `values/` is itself in the user's language, with another `fallbackLocale`,
+  gets its `values/` texts only at the second asking.
+- A `<plurals>` resource is told apart by its general (`other`) form. If
+  `values/` is written in Russian, Ukrainian, Belarusian or Polish with all of
+  that language's forms, a plural the app has not translated can pass for one
+  in another of those four languages.
+
+The second time, after the release's fallback language, the SDK asks the way
+any app does, and gets the language Android picks for your app.
 
 If your release build removes unused resources, keep your strings, because the
 SDK looks them up by name while the app runs. Add `res/raw/keep.xml`:
@@ -415,15 +439,17 @@ A release may have no file at all for the new language. What happens then
 depends on whether the release is known to be the published one:
 
 - Once `latest.json` has named that release, it is read like any other: a file
-  it does not have counts as empty, and the texts come from the fallback
-  locale. A start in that language reads the same. A pinned `version` names
-  the release in the same way, and `latest.json` is not read at all.
+  it does not have counts as empty, and each text comes from the next place it
+  is looked up in, the app's own resource in that language and then the
+  fallback locale (see [Where a text comes from](#5-where-a-text-comes-from)).
+  A start in that language reads the same. A pinned `version` names the
+  release in the same way, and `latest.json` is not read at all.
 - Until then the app shows its bundled strings. That is while `latest.json`
   cannot be read, and with `NEXT_LAUNCH` also while it names a newer release,
   which waits for the next start. A release that answers "not found" for every
-  file of a language may also be one the CDN no longer keeps, and the bundled
-  strings are in the user's language. A file of the fallback locale does not
-  count as an answer here: it says nothing about the new language.
+  file of a language may also be one the CDN no longer keeps, so that answer
+  alone does not put it in use. A file of the fallback locale does not count as
+  an answer here: it says nothing about the new language.
 
 In that second case one thing decides whether the release has the language: a
 file of the locale, or of a shorter form of it, was found, or the release

@@ -29,6 +29,11 @@ android {
         targetCompatibility = JavaVersion.VERSION_11
     }
 
+    testOptions {
+        // The tests of the resource reader need the test resources in src/test/res.
+        unitTests.isIncludeAndroidResources = true
+    }
+
     publishing {
         singleVariant("release") {
             withSourcesJar()
@@ -49,6 +54,7 @@ kotlin {
 
 dependencies {
     testImplementation("junit:junit:4.13.2")
+    testImplementation("org.robolectric:robolectric:4.16.1")
 }
 
 publishing {

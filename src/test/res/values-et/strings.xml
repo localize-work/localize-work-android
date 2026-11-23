@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="bundled_title">Pealkiri</string>
+    <string name="bundled_same">OK</string>
+    <plurals name="bundled_items">
+        <item quantity="one">%1$d asi</item>
+        <item quantity="other">%1$d asja</item>
+    </plurals>
+</resources>

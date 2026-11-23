@@ -23,6 +23,8 @@ The first release.
   47, every language it covers) and `{{name}}` placeholders.
 - Falls back to the app's own string resources, named the way localize.work's
   Android export names them.
+- The user's language first: a resource the app has in the language of the
+  locale is shown before the release's text in the fallback locale.
 - A listener reports when texts change; `setLocale` switches the locale while
   the app runs.
 - No dependencies beyond the Kotlin standard library. Requires Android 5.0

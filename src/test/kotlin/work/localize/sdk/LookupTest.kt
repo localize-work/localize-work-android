@@ -155,7 +155,90 @@ class LookupTest {
     }
 
     @Test
+    fun aBundledTextInTheUsersLanguageComesBeforeTheFallbackLanguage() {
+        val h = Harness(folder.root)
+        val client = h.launchWith(
+            "et" to """{ "both": "published et" }""",
+            "en" to """{ "title": "Title", "both": "published en", "english": { "only": "English only" } }""",
+            configure = { fallbackLocale("en") },
+        )
+        h.bundledIn["et"] = mutableMapOf(
+            "translation_title" to "Pealkiri (bundled)",
+            "translation_both" to "bundled et",
+            "translation_hello" to "Tere, %1\$s!",
+        )
+        h.bundledResources["translation_title"] = "Title (bundled)"
+        h.bundledResources["translation_english_only"] = "Bundled English only"
+
+        assertEquals("Pealkiri (bundled)", client.text("title"))
+        // The release still wins where it has the key in the user's language.
+        assertEquals("published et", client.text("both"))
+        // A key nobody has in the user's language comes from the fallback one.
+        assertEquals("English only", client.text("english.only"))
+        assertEquals("Tere, Ann!", client.text("hello", mapOf("name" to "Ann")))
+    }
+
+    @Test
+    fun aBundledTextInAnotherLanguageStaysBehindTheRelease() {
+        val h = Harness(folder.root)
+        val client = h.launchWith(
+            "et" to "{}",
+            "en" to """{ "title": "Title" }""",
+            configure = { fallbackLocale("en") },
+        )
+        h.bundledResources["translation_title"] = "Title (bundled)"
+        h.bundledResources["translation_bundled_only"] = "Bundled only"
+
+        assertEquals("Title", client.text("title"))
+        assertEquals("Bundled only", client.text("bundled.only"))
+    }
+
+    @Test
+    fun aBundledTextInTheUsersLanguageComesBeforeTheReleasesGeneralForm() {
+        val h = Harness(folder.root)
+        val client = h.launchWith("en" to """{ "items_other": "{{count}} published items" }""")
+        h.bundledIn["en"] = mutableMapOf("translation_items" to "%1\$d item")
+
+        // The general form stands in for a missing one only as a last resort.
+        assertEquals("1 item", client.text("items", count = 1))
+        assertEquals("6 published items", client.text("items", count = 6))
+    }
+
+    @Test
+    fun theUsersLanguageIsTheLocaleInUse() {
+        val h = Harness(folder.root)
+        h.bundledIn["en-FI"] = mutableMapOf("translation_title" to "Finnish English")
+        h.bundledIn["et"] = mutableMapOf("translation_title" to "Eesti")
+        h.bundledResources["translation_title"] = "Default"
+        val client = h.launch("en-FI")
+
+        assertEquals("Finnish English", client.text("title"))
+        client.setLocale("et", null)
+        assertEquals("Eesti", client.text("title"))
+        client.setLocale("de", null)
+        assertEquals("Default", client.text("title"))
+    }
+
+    @Test
     fun aBundledResourceThatThrowsIsTreatedAsMissing() {
+        val unreadable = object : BundledStrings {
+            override fun find(resourceName: String, count: Long?): String? = "from the app"
+
+            override fun findIn(locale: String, resourceName: String, count: Long?): String? =
+                throw IllegalStateException("resources are gone")
+        }
+        val reading = LocalizeClient(
+            config = LocalizeConfig(SLUG) { cdnBaseUrl(CDN) },
+            cacheRoot = folder.root,
+            deviceLocale = "en",
+            transport = FakeTransport(),
+            bundled = unreadable,
+            worker = { it.run() },
+            callbacks = { it.run() },
+        )
+        assertEquals("from the app", reading.text("title", fallback = "fallback"))
+
+
         val client = LocalizeClient(
             config = LocalizeConfig(SLUG) { cdnBaseUrl(CDN) },
             cacheRoot = folder.root,
