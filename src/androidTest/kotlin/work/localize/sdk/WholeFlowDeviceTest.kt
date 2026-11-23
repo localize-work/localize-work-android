@@ -446,6 +446,8 @@ class WholeFlowDeviceTest {
             Device.onMainThread { Localize.init(context, config { refreshOnInit(true) }) }
             Report.line("flow", "Localize.init on the main thread, nothing stored: ${SystemClock.elapsedRealtime() - started} ms")
             assertTrue("the release was not put in use", Device.waitFor { Localize.version == "v1" })
+            // The listener is posted after the release is put in use, so it may not be queued yet.
+            assertTrue("the listener was not told", Device.waitFor { changes.isNotEmpty() })
             settleMainThread()
             assertEquals(listOf("v1"), changes.map { it.version })
             assertTrue(changes.all { it.onMainThread })
