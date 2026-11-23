@@ -11,8 +11,9 @@ connection.
 
 - Kotlin, usable from Java
 - Android 5.0 (API level 21) and newer; your app may compile against any
-  platform version from 21 up. Downloads from the default CDN need Android
-  7.1 (API level 25); see [Android 5.0 to 7.0](#android-50-to-70)
+  platform version from 21 up. Downloads from the default CDN work from
+  Android 7.1.1 and fail on 7.0 and older; see
+  [Android 5.0 to 7.0](#android-50-to-70)
 - No dependencies beyond the Kotlin standard library
 - Sends nothing about the device or the user
 
@@ -520,8 +521,9 @@ up to three times. Anything else is final for that refresh:
 The default CDN, `cdn.localize.work`, has a Let's Encrypt certificate. Android
 7.0 and older do not know the authority that signs it. On those versions every
 download fails as a network error ("Trust anchor for certification path not
-found") and the app shows its bundled strings. Android 7.1 and later
-download normally.
+found") and the app shows its bundled strings. Android 7.1.1 and later
+download normally: that is the first version Let's Encrypt names as trusting
+its root certificate, and the oldest one the SDK was run on that does.
 
 The error is marked retryable all the same: the SDK cannot tell a device that
 is too old from a network that answers in the CDN's place, such as a Wi-Fi
