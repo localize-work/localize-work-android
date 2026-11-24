@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The labels on the left are the demo's own and stay in English; the values
+     on the right come from the SDK. -->
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fitsSystemWindows="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="12dp"
+        tools:ignore="HardcodedText">
+
+        <LinearLayout style="@style/Row">
+            <Button android:id="@+id/lang_en" style="@style/Choice" android:text="en" />
+            <Button android:id="@+id/lang_et" style="@style/Choice" android:text="et" />
+            <Button android:id="@+id/lang_de" style="@style/Choice" android:text="de" />
+            <Button android:id="@+id/refresh" style="@style/Choice" android:layout_weight="2" android:text="Refresh now" />
+        </LinearLayout>
+
+        <LinearLayout style="@style/Row">
+            <TextView style="@style/Label" android:text="release" />
+            <TextView android:id="@+id/version" style="@style/Value" />
+        </LinearLayout>
+
+        <LinearLayout style="@style/Row">
+            <TextView style="@style/Label" android:text="locale" />
+            <TextView android:id="@+id/locale" style="@style/Value" />
+        </LinearLayout>
+
+        <LinearLayout style="@style/Row">
+            <TextView style="@style/Label" android:text="last refresh" />
+            <TextView android:id="@+id/status" style="@style/Value" />
+        </LinearLayout>
+
+        <LinearLayout style="@style/Row">
+            <TextView style="@style/Label" android:text="title" />
+            <TextView android:id="@+id/title" style="@style/Value" />
+        </LinearLayout>
+
+        <LinearLayout style="@style/Row">
+            <TextView style="@style/Label" android:text="greeting" />
+            <TextView android:id="@+id/greeting" style="@style/Value" />
+        </LinearLayout>
+
+        <LinearLayout style="@style/Row">
+            <TextView style="@style/Label" android:text="items, 1" />
+            <TextView android:id="@+id/items_one" style="@style/Value" />
+        </LinearLayout>
+
+        <LinearLayout style="@style/Row">
+            <TextView style="@style/Label" android:text="items, 5" />
+            <TextView android:id="@+id/items_five" style="@style/Value" />
+        </LinearLayout>
+
+        <LinearLayout style="@style/Row">
+            <TextView style="@style/Label" android:text="only_source" />
+            <TextView android:id="@+id/only_source" style="@style/Value" />
+        </LinearLayout>
+
+        <LinearLayout style="@style/Row">
+            <TextView style="@style/Label" android:text="only_bundled" />
+            <TextView android:id="@+id/only_bundled" style="@style/Value" />
+        </LinearLayout>
+
+        <LinearLayout style="@style/Row">
+            <TextView style="@style/Label" android:text="added_later" />
+            <TextView android:id="@+id/added_later" style="@style/Value" />
+        </LinearLayout>
+
+        <LinearLayout style="@style/Row">
+            <TextView style="@style/Label" android:text="missing" />
+            <TextView android:id="@+id/missing" style="@style/Value" />
+        </LinearLayout>
+
+    </LinearLayout>
+</ScrollView>

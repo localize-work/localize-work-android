@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The texts the app ships with, named as localize.work's Android export
+     names them: the namespace and the key joined by "_". They are worded
+     differently from the published ones so the screen shows where a text
+     came from. -->
+<resources>
+    <string name="translation_title">Demo (bundled)</string>
+    <string name="translation_greeting">Hello, %1$s! (bundled)</string>
+    <plurals name="translation_items">
+        <item quantity="one">%1$d item (bundled)</item>
+        <item quantity="other">%1$d items (bundled)</item>
+    </plurals>
+    <string name="translation_only_source">Only source (bundled)</string>
+    <string name="translation_only_bundled">Only in the app</string>
+</resources>

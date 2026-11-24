@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="translation_title">Demo (kaasas)</string>
+    <string name="translation_greeting">Tere, %1$s! (kaasas)</string>
+    <plurals name="translation_items">
+        <item quantity="one">%1$d asi (kaasas)</item>
+        <item quantity="other">%1$d asja (kaasas)</item>
+    </plurals>
+    <string name="translation_only_bundled">Ainult rakenduses</string>
+</resources>

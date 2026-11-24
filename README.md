@@ -566,6 +566,35 @@ pass your own `transport`.
 - Files are downloaded one after another.
 - Missing keys are not reported back to localize.work.
 
+## Example app
+
+`example/` is a small app with one screen. It sets the SDK up, shows a handful
+of texts with the release and the locale they are read in, switches between
+three languages and refreshes on a button. It uses the library as an app of
+your own does, built from the source next to it.
+
+```sh
+./gradlew -p example installDebug
+adb shell am start -n work.localize.demo/.MainActivity --es slug my-project --es locale et
+```
+
+The extras are `slug`, `locale`, `cdn` (an address other than the default CDN)
+and `policy` (`next_launch`). The example is a Gradle build of its own, so it
+needs `example/local.properties` or `ANDROID_HOME` as well. Its debug build may
+use plain HTTP, so it can be pointed at a server on your own network.
+
+`example/flow.sh` runs the app's whole flow on a device or emulator and reads
+the result off the screen: bundled texts on a first launch without a network,
+the first download, languages, an update while the app is open, an update at
+the next launch, and a cold start without a network. It needs a test project
+and a server that publishes that project on request; the head of the script
+says what both must hold.
+
+```sh
+./gradlew -p example assembleDebug assembleDebugAndroidTest
+example/flow.sh http://192.168.1.10:3411/cdn http://192.168.1.10:3412 flow-pictures
+```
+
 ## Building from source
 
 You need JDK 17 and the Android SDK (platform 36, build-tools 36.0.0). Point

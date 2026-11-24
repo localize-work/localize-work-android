@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- The debug build alone may use plain HTTP, so it can be pointed at a
+         server on your own network. Android 7.0 and later read the file,
+         Android 6.0 the attribute. A release build keeps Android's default. -->
+    <application
+        android:networkSecurityConfig="@xml/network_security_config"
+        android:usesCleartextTraffic="true" />
+
+</manifest>
