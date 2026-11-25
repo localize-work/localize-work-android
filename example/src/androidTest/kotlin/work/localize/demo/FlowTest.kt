@@ -269,9 +269,9 @@ class FlowTest {
     }
 
     /**
-     * Android 5.0 goes on reporting a window where its opening animation
-     * began, below the screen, and UiAutomator then takes every view in it
-     * for hidden. Turning the list of windows off makes the system build it
+     * Android 5.0 goes on reporting a window it has just opened as lying
+     * below the screen, and UiAutomator then takes every view in it for
+     * hidden. Turning the list of windows off makes the system build it
      * again; UiAutomator turns it back on at its next search.
      */
     private fun rereadWindows() {
