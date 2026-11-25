@@ -65,22 +65,29 @@ quiet() {
     "$ADB" shell "$@" >/dev/null 2>&1
 }
 
+# Runs a command on the device as the shell user and as root. Android 7 lets
+# the shell user turn off neither Wi-Fi nor airplane mode; an emulator has su.
+either() {
+    quiet "$@"
+    quiet su 0 "$@"
+}
+
 # Turns the device's network off or on. Which command does it differs between
 # Android versions, so all of them are tried; a phase that needs the network
 # off checks for itself that the server cannot be reached.
 network() {
     if [ "$1" = off ]; then
-        quiet svc wifi disable
-        quiet svc data disable
+        either svc wifi disable
+        either svc data disable
         quiet cmd connectivity airplane-mode enable
         quiet settings put global airplane_mode_on 1
-        quiet am broadcast -a android.intent.action.AIRPLANE_MODE --ez state true
+        either am broadcast -a android.intent.action.AIRPLANE_MODE --ez state true
     else
         quiet settings put global airplane_mode_on 0
-        quiet am broadcast -a android.intent.action.AIRPLANE_MODE --ez state false
+        either am broadcast -a android.intent.action.AIRPLANE_MODE --ez state false
         quiet cmd connectivity airplane-mode disable
-        quiet svc wifi enable
-        quiet svc data enable
+        either svc wifi enable
+        either svc data enable
     fi
 }
 
