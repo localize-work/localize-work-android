@@ -588,7 +588,8 @@ the result off the screen: bundled texts on a first launch without a network,
 the first download, languages, an update while the app is open, an update at
 the next launch, and a cold start without a network. It needs a test project
 and a server that publishes that project on request; the head of the script
-says what both must hold.
+says what both must hold. With a fourth argument, the slug of a project
+published on the default CDN, it also reads that project once over HTTPS.
 
 ```sh
 ./gradlew -p example assembleDebug assembleDebugAndroidTest
