@@ -6,6 +6,7 @@ import android.net.http.X509TrustManagerExtensions
 import android.os.Build
 import android.os.SystemClock
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
 import java.io.File
 import java.security.KeyStore
 import java.security.cert.X509Certificate
@@ -20,12 +21,19 @@ import javax.net.ssl.X509TrustManager
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
  * HTTPS to the real CDN with the library's own transport: a handful of plain
- * `GET`s for public files of the project `example-project`.
+ * `GET`s for public files of a published project.
+ *
+ * The project is named when the tests are started: `-e realProject <slug>`
+ * to `am instrument`, or
+ * `-Pandroid.testInstrumentationRunnerArguments.realProject=<slug>` to
+ * Gradle. Its live release needs the namespace `translation` in Estonian.
+ * Without a name the two tests that download are skipped.
  *
  * The README says which versions can download from it: Android 7.1.1 and
  * later. Older ones do not know the authority that signs the CDN's
@@ -37,7 +45,13 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class RealCdnDeviceTest {
     private val host = "cdn.localize.work"
-    private val project = "example-project"
+
+    /** The project named for this run; the test that asks is skipped when there is none. */
+    private fun namedProject(): String {
+        val name = InstrumentationRegistry.getArguments().getString("realProject").orEmpty().trim()
+        assumeTrue("no project named: start the tests with -e realProject <slug>", name.isNotEmpty())
+        return name
+    }
 
     /** Android 7.1.1 is the first version whose own certificates vouch for the CDN's. */
     private val trustsTheCdn = Device.sdk >= Build.VERSION_CODES.N_MR1
@@ -47,6 +61,7 @@ class RealCdnDeviceTest {
 
     @Test
     fun theBuiltInTransportReadsThePointerAndAFile() {
+        val project = namedProject()
         val transport = HttpUrlConnectionTransport(connectTimeoutMillis = 10_000, readTimeoutMillis = 15_000)
         if (!trustsTheCdn) {
             val failure = try {
@@ -85,6 +100,7 @@ class RealCdnDeviceTest {
 
     @Test
     fun aRealProjectLoadsThroughThePublicApi() {
+        val project = namedProject()
         val cache = File(Device.context.cacheDir, "lw-real-${System.nanoTime()}")
         try {
             Device.onMainThread {
