@@ -1,5 +1,6 @@
 package work.localize.demo
 
+import android.accessibilityservice.AccessibilityServiceInfo
 import android.content.Intent
 import android.graphics.Bitmap
 import android.os.Build
@@ -260,7 +261,24 @@ class FlowTest {
         cdn?.let { intent.putExtra("cdn", it) }
         policy?.let { intent.putExtra("policy", it) }
         instrumentation.targetContext.startActivity(intent)
-        assertTrue("the app's screen did not appear", device.wait(Until.hasObject(By.res(pkg, "version")), 30_000) == true)
+        val deadline = System.currentTimeMillis() + 30_000
+        while (device.wait(Until.hasObject(By.res(pkg, "version")), 1_000) != true) {
+            assertTrue("the app's screen did not appear", System.currentTimeMillis() < deadline)
+            rereadWindows()
+        }
+    }
+
+    /**
+     * Android 5.0 goes on reporting a window where its opening animation
+     * began, below the screen, and UiAutomator then takes every view in it
+     * for hidden. Turning the list of windows off makes the system build it
+     * again; UiAutomator turns it back on at its next search.
+     */
+    private fun rereadWindows() {
+        val automation = instrumentation.uiAutomation
+        val service = automation.serviceInfo ?: return
+        service.flags = service.flags and AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS.inv()
+        automation.serviceInfo = service
     }
 
     /** Waits until the view [id] shows exactly [text]. */
