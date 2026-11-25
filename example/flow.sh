@@ -150,6 +150,8 @@ quiet input keyevent 82  # past the lock screen
 #    network is turned back on however the flow ends; a flow that stopped
 #    before this line has left the device's settings alone.
 trap 'network on' EXIT
+# Not every shell runs the EXIT trap when a signal ends the script.
+trap 'exit 130' HUP INT TERM
 network off
 phase offlineFirstLaunch
 

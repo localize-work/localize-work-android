@@ -579,9 +579,12 @@ adb shell am start -n work.localize.demo/.MainActivity --es slug my-project --es
 ```
 
 The extras are `slug`, `locale`, `cdn` (an address other than the default CDN)
-and `policy` (`next_launch`). The example is a Gradle build of its own, so it
-needs `example/local.properties` or `ANDROID_HOME` as well. Its debug build may
-use plain HTTP, so it can be pointed at a server on your own network.
+and `policy` (`next_launch`). They are read once, when the app's process
+starts: to try other values, stop the app first with
+`adb shell am force-stop work.localize.demo`. The example is a Gradle build of
+its own, so it needs `example/local.properties` or `ANDROID_HOME` as well. Its
+debug build may use plain HTTP, so it can be pointed at a server on your own
+network.
 
 `example/flow.sh` runs the app's whole flow on a device or emulator and reads
 the result off the screen: bundled texts on a first launch without a network,
