@@ -37,7 +37,9 @@
 # The flow turns the device's network off twice and back on, also when it
 # stops early after turning it off. It publishes two releases of the test
 # project. Use an emulator or a device on a USB cable: over wireless debugging
-# turning Wi-Fi off cuts adb itself, and nothing can turn it back on.
+# turning Wi-Fi off cuts adb itself, and nothing can turn it back on. Give an
+# emulator a minute after it has booted: a freshly booted one takes a few
+# seconds to drop its network, and the first phase checks at once.
 
 set -u
 
