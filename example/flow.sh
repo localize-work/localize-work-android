@@ -35,7 +35,8 @@
 # language should be English: the app's default resources are.
 #
 # The flow turns the device's network off twice and back on, also when it
-# stops early. It publishes two releases of the test project.
+# stops early after turning it off. It publishes two releases of the test
+# project.
 
 set -u
 
@@ -133,8 +134,6 @@ phase() {
     esac
 }
 
-trap 'network on' EXIT
-
 "$ADB" wait-for-device || stop "no device"
 SDK=$("$ADB" shell getprop ro.build.version.sdk | tr -d '\r')
 START=$(live_version)
@@ -147,7 +146,10 @@ quiet pm clear "$PKG"
 quiet input keyevent 224 # wake up
 quiet input keyevent 82  # past the lock screen
 
-# 1. A first launch without a network: the app's own texts.
+# 1. A first launch without a network: the app's own texts. From here on the
+#    network is turned back on however the flow ends; a flow that stopped
+#    before this line has left the device's settings alone.
+trap 'network on' EXIT
 network off
 phase offlineFirstLaunch
 
